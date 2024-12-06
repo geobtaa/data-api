@@ -15,8 +15,9 @@ async def read_item(document_id: str):
     return await database.fetch_one(query)
 
 
+# @TODO: Implement search across all text fields; Is there a Solr equivalent to copyfields?
 @router.get("/documents/")
-async def read_documents(skip: int = 0, limit: int = 20):
+async def read_documents(skip: int = 0, limit: int = 20, q: str = None):
     # Check if the requested limit exceeds the maximum allowed
     if limit > 100:
         raise HTTPException(
@@ -26,10 +27,16 @@ async def read_documents(skip: int = 0, limit: int = 20):
 
     # Fetch the total count of documents
     total_count_query = select(func.count()).select_from(geoportal_development)
+    if q:
+        total_count_query = total_count_query.where(
+            geoportal_development.c.dct_title_s.ilike(f"%{q}%")
+        )
     total_count = await database.fetch_val(total_count_query)
 
     # Fetch the paginated documents
     query = geoportal_development.select().offset(skip).limit(limit)
+    if q:
+        query = query.where(geoportal_development.c.dct_title_s.ilike(f"%{q}%"))
     documents = await database.fetch_all(query)
 
     # Calculate pagination details
