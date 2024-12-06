@@ -20,6 +20,12 @@ uvicorn main:app --reload
 
 ## Endpoints
 
+### GET /openapi.json
+
+[http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
+
+Returns the OpenAPI schema.
+
 ### GET /docs
 
 [http://localhost:8000/docs](http://localhost:8000/docs)
