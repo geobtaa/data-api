@@ -8,6 +8,11 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
+Configure the database:
+```bash
+cp .env.example .env
+```
+
 Run the server:
 ```bash
 uvicorn main:app --reload
