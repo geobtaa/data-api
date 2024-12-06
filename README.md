@@ -39,3 +39,12 @@ Returns the API documentation.
 Returns a paginated list of documents.
 
 
+## TODO
+
+- [ ] Implement basic search across all text fields
+- [ ] Implement more complex search with filters
+- [ ] Implement faceting
+- [ ] Implement sorting
+- [ ] Implement fielded search
+- [ ] Implement autocomplete
+- [ ] Implement suggestions
