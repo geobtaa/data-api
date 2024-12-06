@@ -15,7 +15,27 @@ async def read_item(document_id: str):
     return await database.fetch_one(query)
 
 
-# @TODO: Implement search across all text fields; Is there a Solr equivalent to copyfields?
+async def get_total_count(q: str = None):
+    total_count_query = select(func.count()).select_from(geoportal_development)
+    if q:
+        total_count_query = total_count_query.where(
+            geoportal_development.c.dct_title_s.ilike(f"%{q}%")
+        )
+    return await database.fetch_val(total_count_query)
+
+async def get_paginated_documents(skip: int, limit: int, q: str = None):
+    query = geoportal_development.select().offset(skip).limit(limit)
+    if q:
+        query = query.where(geoportal_development.c.dct_title_s.ilike(f"%{q}%"))
+    return await database.fetch_all(query)
+
+def calculate_pagination_details(skip: int, limit: int, total_count: int):
+    current_page = (skip // limit) + 1
+    total_pages = (total_count // limit) + (1 if total_count % limit > 0 else 0)
+    next_page = current_page + 1 if current_page < total_pages else None
+    prev_page = current_page - 1 if current_page > 1 else None
+    return current_page, total_pages, next_page, prev_page
+
 @router.get("/documents/")
 async def read_documents(skip: int = 0, limit: int = 20, q: str = None):
     # Check if the requested limit exceeds the maximum allowed
@@ -26,24 +46,13 @@ async def read_documents(skip: int = 0, limit: int = 20, q: str = None):
         )
 
     # Fetch the total count of documents
-    total_count_query = select(func.count()).select_from(geoportal_development)
-    if q:
-        total_count_query = total_count_query.where(
-            geoportal_development.c.dct_title_s.ilike(f"%{q}%")
-        )
-    total_count = await database.fetch_val(total_count_query)
+    total_count = await get_total_count(q)
 
     # Fetch the paginated documents
-    query = geoportal_development.select().offset(skip).limit(limit)
-    if q:
-        query = query.where(geoportal_development.c.dct_title_s.ilike(f"%{q}%"))
-    documents = await database.fetch_all(query)
+    documents = await get_paginated_documents(skip, limit, q)
 
     # Calculate pagination details
-    current_page = (skip // limit) + 1
-    total_pages = (total_count // limit) + (1 if total_count % limit > 0 else 0)
-    next_page = current_page + 1 if current_page < total_pages else None
-    prev_page = current_page - 1 if current_page > 1 else None
+    current_page, total_pages, next_page, prev_page = calculate_pagination_details(skip, limit, total_count)
 
     # Base URL for constructing links
     base_url = "http://localhost:8000/api/v1/documents"
