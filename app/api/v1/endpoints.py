@@ -6,13 +6,30 @@ import json
 
 router = APIRouter()
 
-
 @router.get("/documents/{document_id}")
 async def read_item(document_id: str):
     query = geoportal_development.select().where(
         geoportal_development.c.id == document_id
     )
-    return await database.fetch_one(query)
+    document = await database.fetch_one(query)
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Transform the document into JSON:API format
+    json_api_response = {
+        "data": {
+            "type": "document",
+            "id": str(document["id"]),
+            "attributes": {
+                key: (json.loads(value) if key == "dct_references_s" else value)
+                for key, value in dict(document).items()
+                if key != "id"
+            },
+        }
+    }
+
+    return json_api_response
 
 
 async def get_total_count(q: str = None):
