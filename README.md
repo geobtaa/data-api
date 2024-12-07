@@ -1,6 +1,8 @@
 # data-api
 FastAPI JSON:API for BTAA Aardvark Metadata
 
+![Data API](docs/data-api.png)
+
 ## Development
 
 Install dependencies:
