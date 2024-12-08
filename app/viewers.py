@@ -1,0 +1,71 @@
+from typing import Dict, Optional, TypedDict
+
+class Reference(TypedDict):
+    protocol: str
+    endpoint: str
+
+class ItemViewer:
+    REFERENCE_URI_TO_NAME = {
+        'urn:x-esri:serviceType:ArcGIS#DynamicMapLayer': 'arcgis_dynamic_map_layer',
+        'urn:x-esri:serviceType:ArcGIS#FeatureLayer': 'arcgis_feature_layer',
+        'urn:x-esri:serviceType:ArcGIS#ImageMapLayer': 'arcgis_image_map_layer',
+        'urn:x-esri:serviceType:ArcGIS#TiledMapLayer': 'arcgis_tiled_map_layer',
+        'https://github.com/cogeotiff/cog-spec': 'cog',
+        'http://lccn.loc.gov/sh85035852': 'documentation_download',
+        'http://schema.org/url': 'documentation_external',
+        'http://schema.org/downloadUrl': 'download',
+        'http://geojson.org/geojson-spec.html': 'geo_json',
+        'http://iiif.io/api/image': 'iiif_image',
+        'http://iiif.io/api/presentation#manifest': 'iiif_manifest',
+        'http://schema.org/image': 'image',
+        'http://www.opengis.net/cat/csw/csdgm': 'metadata_fgdc',
+        'http://www.w3.org/1999/xhtml': 'metadata_html',
+        'http://www.isotc211.org/schemas/2005/gmd/': 'metadata_iso',
+        'http://www.loc.gov/mods/v3': 'metadata_mods',
+        'https://oembed.com': 'oembed',
+        'https://openindexmaps.org': 'open_index_map',
+        'https://github.com/protomaps/PMTiles': 'pmtiles',
+        'http://schema.org/thumbnailUrl': 'thumbnail',
+        'https://wiki.osgeo.org/wiki/Tile_Map_Service_Specification': 'tile_map_service',
+        'https://github.com/mapbox/tilejson-spec': 'tile_json',
+        'http://www.opengis.net/def/serviceType/ogc/wcs': 'wcs',
+        'http://www.opengis.net/def/serviceType/ogc/wfs': 'wfs',
+        'http://www.opengis.net/def/serviceType/ogc/wmts': 'wmts',
+        'http://www.opengis.net/def/serviceType/ogc/wms': 'wms',
+        'https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames': 'xyz_tiles'
+    }
+
+    def __init__(self, references: Dict[str, str]):
+        self.references = references
+
+    def viewer_protocol(self) -> Optional[str]:
+        preference = self._viewer_preference()
+        return self.REFERENCE_URI_TO_NAME.get(preference['protocol']) if preference else None
+
+    def viewer_endpoint(self) -> str:
+        preference = self._viewer_preference()
+        return preference['endpoint'] if preference else ""
+
+    def _viewer_preference(self) -> Optional[Reference]:
+        preferences = [
+            self._get_reference('https://github.com/cogeotiff/cog-spec'),
+            self._get_reference('https://github.com/protomaps/PMTiles'),
+            self._get_reference('https://oembed.com'),
+            self._get_reference('https://openindexmaps.org'),
+            self._get_reference('https://github.com/mapbox/tilejson-spec'),
+            self._get_reference('https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames'),
+            self._get_reference('http://www.opengis.net/def/serviceType/ogc/wmts'),
+            self._get_reference('https://wiki.osgeo.org/wiki/Tile_Map_Service_Specification'),
+            self._get_reference('http://www.opengis.net/def/serviceType/ogc/wms'),
+            self._get_reference('http://iiif.io/api/presentation#manifest'),
+            self._get_reference('http://iiif.io/api/image'),
+            self._get_reference('urn:x-esri:serviceType:ArcGIS#TiledMapLayer'),
+            self._get_reference('urn:x-esri:serviceType:ArcGIS#DynamicMapLayer'),
+            self._get_reference('urn:x-esri:serviceType:ArcGIS#ImageMapLayer'),
+            self._get_reference('urn:x-esri:serviceType:ArcGIS#FeatureLayer')
+        ]
+        return next((pref for pref in preferences if pref is not None), None)
+
+    def _get_reference(self, protocol: str) -> Optional[Reference]:
+        endpoint = self.references.get(protocol)
+        return {'protocol': protocol, 'endpoint': endpoint} if endpoint else None

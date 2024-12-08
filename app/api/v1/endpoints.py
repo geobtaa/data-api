@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from db.database import database
 from db.models import geoportal_development
 from sqlalchemy import select, func
+from ...viewers import ItemViewer
 import json
 
 router = APIRouter()
@@ -16,15 +17,31 @@ async def read_item(document_id: str):
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    # Parse references and create viewer
+    try:
+        references = json.loads(document["dct_references_s"]) if document["dct_references_s"] else {}
+        viewer = ItemViewer(references)
+        
+        # Get viewer attributes
+        ui_viewer_protocol = viewer.viewer_protocol()
+        ui_viewer_endpoint = viewer.viewer_endpoint()
+    except json.JSONDecodeError:
+        ui_viewer_protocol = None
+        ui_viewer_endpoint = ""
+
     # Transform the document into JSON:API format
     json_api_response = {
         "data": {
             "type": "document",
             "id": str(document["id"]),
             "attributes": {
-                key: (json.loads(value) if key == "dct_references_s" else value)
-                for key, value in dict(document).items()
-                if key != "id"
+                **{
+                    key: (json.loads(value) if key == "dct_references_s" else value)
+                    for key, value in dict(document).items()
+                    if key != "id"
+                },
+                "ui_viewer_protocol": ui_viewer_protocol,
+                "ui_viewer_endpoint": ui_viewer_endpoint
             },
         }
     }
@@ -85,16 +102,24 @@ async def read_documents(skip: int = 0, limit: int = 20, q: str = None):
         ),
     }
 
-    # Transform the documents into JSON:API format
+    # Transform the documents into JSON:API format with viewer attributes
     json_api_response = {
         "data": [
             {
                 "type": "document",
                 "id": str(document["id"]),
                 "attributes": {
-                    key: (json.loads(value) if key == "dct_references_s" else value)
-                    for key, value in dict(document).items()
-                    if key != "id"
+                    **{
+                        key: (json.loads(value) if key == "dct_references_s" else value)
+                        for key, value in dict(document).items()
+                        if key != "id"
+                    },
+                    "ui_viewer_protocol": ItemViewer(
+                        json.loads(document["dct_references_s"]) if document["dct_references_s"] else {}
+                    ).viewer_protocol(),
+                    "ui_viewer_endpoint": ItemViewer(
+                        json.loads(document["dct_references_s"]) if document["dct_references_s"] else {}
+                    ).viewer_endpoint(),
                 },
             }
             for document in documents
