@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from db.database import database
-from db.models import geoportal_development
+from db.models import geoblacklight_development
 from sqlalchemy import select, func
 from ...viewers import ItemViewer
 import json
@@ -9,8 +9,8 @@ router = APIRouter()
 
 @router.get("/documents/{document_id}")
 async def read_item(document_id: str):
-    query = geoportal_development.select().where(
-        geoportal_development.c.id == document_id
+    query = geoblacklight_development.select().where(
+        geoblacklight_development.c.id == document_id
     )
     document = await database.fetch_one(query)
 
@@ -50,17 +50,17 @@ async def read_item(document_id: str):
 
 
 async def get_total_count(q: str = None):
-    total_count_query = select(func.count()).select_from(geoportal_development)
+    total_count_query = select(func.count()).select_from(geoblacklight_development)
     if q:
         total_count_query = total_count_query.where(
-            geoportal_development.c.dct_title_s.ilike(f"%{q}%")
+            geoblacklight_development.c.dct_title_s.ilike(f"%{q}%")
         )
     return await database.fetch_val(total_count_query)
 
 async def get_paginated_documents(skip: int, limit: int, q: str = None):
-    query = geoportal_development.select().offset(skip).limit(limit)
+    query = geoblacklight_development.select().offset(skip).limit(limit)
     if q:
-        query = query.where(geoportal_development.c.dct_title_s.ilike(f"%{q}%"))
+        query = query.where(geoblacklight_development.c.dct_title_s.ilike(f"%{q}%"))
     return await database.fetch_all(query)
 
 def calculate_pagination_details(skip: int, limit: int, total_count: int):
