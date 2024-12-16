@@ -20,14 +20,20 @@ async def read_item(document_id: str):
     # Parse references and create viewer
     try:
         references = json.loads(document["dct_references_s"]) if document["dct_references_s"] else {}
+        # Add locn_geometry to references if it exists
+        if document["locn_geometry"]:
+            references["locn_geometry"] = document["locn_geometry"]
+        
         viewer = ItemViewer(references)
         
         # Get viewer attributes
         ui_viewer_protocol = viewer.viewer_protocol()
         ui_viewer_endpoint = viewer.viewer_endpoint()
+        ui_viewer_geometry = viewer.viewer_geometry()
     except json.JSONDecodeError:
         ui_viewer_protocol = None
         ui_viewer_endpoint = ""
+        ui_viewer_geometry = None
 
     # Transform the document into JSON:API format
     json_api_response = {
@@ -41,7 +47,8 @@ async def read_item(document_id: str):
                     if key != "id"
                 },
                 "ui_viewer_protocol": ui_viewer_protocol,
-                "ui_viewer_endpoint": ui_viewer_endpoint
+                "ui_viewer_endpoint": ui_viewer_endpoint,
+                "ui_viewer_geometry": ui_viewer_geometry
             },
         }
     }
@@ -114,15 +121,16 @@ async def read_documents(skip: int = 0, limit: int = 20, q: str = None):
                         for key, value in dict(document).items()
                         if key != "id"
                     },
-                    "ui_viewer_protocol": ItemViewer(
-                        json.loads(document["dct_references_s"]) if document["dct_references_s"] else {}
-                    ).viewer_protocol(),
-                    "ui_viewer_endpoint": ItemViewer(
-                        json.loads(document["dct_references_s"]) if document["dct_references_s"] else {}
-                    ).viewer_endpoint(),
+                    "ui_viewer_protocol": viewer.viewer_protocol(),
+                    "ui_viewer_endpoint": viewer.viewer_endpoint(),
+                    "ui_viewer_geometry": viewer.viewer_geometry(),
                 },
             }
             for document in documents
+            for viewer in [ItemViewer({
+                **(json.loads(document["dct_references_s"]) if document["dct_references_s"] else {}),
+                "locn_geometry": document["locn_geometry"] if document["locn_geometry"] else None
+            })]
         ],
         "meta": {
             "pages": {

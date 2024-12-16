@@ -1,8 +1,14 @@
-from typing import Dict, Optional, TypedDict
+from typing import Dict, Optional, TypedDict, Union, List
+import json
+import re
 
 class Reference(TypedDict):
     protocol: str
     endpoint: str
+
+class GeoJSON(TypedDict):
+    type: str
+    coordinates: Union[List[List[List[float]]], List[float]]
 
 class ItemViewer:
     REFERENCE_URI_TO_NAME = {
@@ -69,3 +75,35 @@ class ItemViewer:
     def _get_reference(self, protocol: str) -> Optional[Reference]:
         endpoint = self.references.get(protocol)
         return {'protocol': protocol, 'endpoint': endpoint} if endpoint else None
+
+    def viewer_geometry(self) -> Optional[GeoJSON]:
+        """Convert locn_geometry to a GeoJSON object."""
+        if not self.references.get('locn_geometry'):
+            return None
+
+        geometry = self.references['locn_geometry']
+        
+        # Check if it's an ENVELOPE format
+        envelope_match = re.match(r'ENVELOPE\(([-\d.]+),([-\d.]+),([-\d.]+),([-\d.]+)\)', geometry)
+        if envelope_match:
+            # Extract coordinates from ENVELOPE(minx,maxx,maxy,miny)
+            minx, maxx, maxy, miny = map(float, envelope_match.groups())
+            # Create a polygon from the envelope coordinates
+            return {
+                "type": "Polygon",
+                "coordinates": [[
+                    [minx, maxy],  # top left
+                    [minx, miny],  # bottom left
+                    [maxx, miny],  # bottom right
+                    [maxx, maxy],  # top right
+                    [minx, maxy]   # close the polygon
+                ]]
+            }
+        
+        # Try parsing as JSON (handling escaped quotes)
+        try:
+            # Replace escaped quotes and parse
+            clean_geometry = geometry.replace('&quot;', '"')
+            return json.loads(clean_geometry)
+        except json.JSONDecodeError:
+            return None
