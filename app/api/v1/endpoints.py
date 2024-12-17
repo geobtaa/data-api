@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, Request
 from db.database import database
 from db.models import geoblacklight_development
 from sqlalchemy import select, func
 from ...viewers import ItemViewer
 import json
+from ...elasticsearch import index_documents, search_documents
+from typing import Optional, Dict, List
 
 router = APIRouter()
 
@@ -149,3 +151,70 @@ async def read_documents(skip: int = 0, limit: int = 20, q: str = None):
     }
 
     return json_api_response
+
+@router.post("/index")
+async def index_to_elasticsearch():
+    """Index all documents from PostgreSQL to Elasticsearch."""
+    result = await index_documents()
+    return result
+
+@router.get("/search")
+async def search(
+    request: Request,
+    q: Optional[str] = Query(None, description="Search query string"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(20, ge=1, le=100, description="Number of records to return")
+):
+    """
+    Search documents using Elasticsearch.
+    
+    Parameters:
+    - q: Search query string
+    - fq[field][]: Filter queries as arrays, e.g. fq[resource_class_agg][]=Map
+    - skip: Number of records to skip (pagination offset)
+    - limit: Number of records to return (page size)
+    
+    Example:
+    /search?q=water&fq[resource_class_agg][]=Map&fq[provider_agg][]=Minnesota
+    """
+    try:
+        # Get all query parameters
+        params = dict(request.query_params)
+        
+        # Extract filter queries from params
+        filter_query = {}
+        
+        # Map aggregation names to actual field names
+        agg_to_field = {
+            'spatial_agg': 'dct_spatial_sm',
+            'resource_class_agg': 'gbl_resourceclass_sm',
+            'resource_type_agg': 'gbl_resourcetype_sm',
+            'index_year_agg': 'gbl_indexyear_im',
+            'language_agg': 'dct_language_sm',
+            'creator_agg': 'dct_creator_sm',
+            'provider_agg': 'schema_provider_s',
+            'access_rights_agg': 'dct_accessrights_sm',
+            'georeferenced_agg': 'gbl_georeferenced_b'
+        }
+        
+        # Process filter parameters
+        for key in params:
+            if key.startswith('fq[') and key.endswith('][]'):
+                # Extract the field name from fq[field][]
+                field = key[3:-3]  # Remove 'fq[' and '[]'
+                if field in agg_to_field:
+                    # Get the actual field name and values
+                    es_field = agg_to_field[field]
+                    values = request.query_params.getlist(key)
+                    if values:
+                        filter_query[es_field] = values
+
+        results = await search_documents(
+            query=q,
+            fq=filter_query,
+            skip=skip,
+            limit=limit
+        )
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

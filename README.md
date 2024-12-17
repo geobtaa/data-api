@@ -40,6 +40,11 @@ Returns the API documentation.
 
 Returns a paginated list of documents.
 
+## Elasticsearch
+
+```bash
+docker compose up -d
+```
 
 ## TODO
 
