@@ -83,8 +83,13 @@ class ItemViewer:
 
         geometry = self.references['locn_geometry']
         
+        print(geometry)
         # Check if it's an ENVELOPE format
+
+        
         envelope_match = re.match(r'ENVELOPE\(([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\)', geometry)
+
+        print(envelope_match)
 
         if envelope_match:
             # Extract coordinates from ENVELOPE(minx,maxx,maxy,miny)
@@ -99,6 +104,25 @@ class ItemViewer:
                     [maxx, maxy],  # top right
                     [minx, maxy]   # close the polygon
                 ]]
+            }
+        
+        # Check if it's a POLYGON format
+        polygon_match = re.match(r'POLYGON\(\(\s*([-\d.\s,]+)\s*\)\)', geometry)
+
+        if polygon_match:
+            # Extract coordinates from POLYGON((x1 y1, x2 y2, ..., xn yn))
+            coordinates_str = polygon_match.group(1)
+            # Split the coordinates and convert them to float pairs
+            coordinates = [
+                list(map(float, coord.split()))
+                for coord in coordinates_str.split(',')
+            ]
+            # Ensure the polygon is closed by repeating the first point at the end
+            if coordinates[0] != coordinates[-1]:
+                coordinates.append(coordinates[0])
+            return {
+                "type": "Polygon",
+                "coordinates": [coordinates]
             }
         
         # Try parsing as JSON (handling escaped quotes)
