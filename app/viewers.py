@@ -46,7 +46,7 @@ class ItemViewer:
 
     def viewer_protocol(self) -> Optional[str]:
         preference = self._viewer_preference()
-        return self.REFERENCE_URI_TO_NAME.get(preference['protocol']) if preference else None
+        return self.REFERENCE_URI_TO_NAME.get(preference['protocol']) if preference else 'geo_json'
 
     def viewer_endpoint(self) -> str:
         preference = self._viewer_preference()
@@ -84,7 +84,8 @@ class ItemViewer:
         geometry = self.references['locn_geometry']
         
         # Check if it's an ENVELOPE format
-        envelope_match = re.match(r'ENVELOPE\(([-\d.]+),([-\d.]+),([-\d.]+),([-\d.]+)\)', geometry)
+        envelope_match = re.match(r'ENVELOPE\(([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\)', geometry)
+
         if envelope_match:
             # Extract coordinates from ENVELOPE(minx,maxx,maxy,miny)
             minx, maxx, maxy, miny = map(float, envelope_match.groups())

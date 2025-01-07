@@ -5,9 +5,25 @@ from db.models import geoblacklight_development
 import os
 import time
 
+def get_search_criteria(query: str, fq: dict, skip: int, limit: int):
+    """Return the currently applied search criteria."""
+    return {
+        "query": query,
+        "filters": fq,
+        "pagination": {
+            "skip": skip,
+            "limit": limit
+        },
+        "sort": [{"_score": "desc"}]
+    }
+
 async def search_documents(query: str = None, fq: dict = None, skip: int = 0, limit: int = 20):
     """Search documents in Elasticsearch with optional filters."""
     index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
+    
+    # Get the current search criteria
+    search_criteria = get_search_criteria(query, fq, skip, limit)
+    print("Current Search Criteria:", search_criteria)
     
     # Construct the filter query
     filter_clauses = []
@@ -70,13 +86,13 @@ async def search_documents(query: str = None, fq: dict = None, skip: int = 0, li
             track_total_hits=True
         )
         
-        return await process_search_response(response, limit, skip)
+        return await process_search_response(response, limit, skip, search_criteria)
         
     except Exception as e:
         print(f"Search error: {e}")
         raise HTTPException(status_code=500, detail="Search operation failed")
 
-async def process_search_response(response, limit, skip):
+async def process_search_response(response, limit, skip, search_criteria):
     """Process Elasticsearch response and fetch documents from PostgreSQL."""
     total_hits = response["hits"]["total"]["value"]
     document_ids = [hit["_source"]["id"] for hit in response["hits"]["hits"]]
@@ -88,7 +104,7 @@ async def process_search_response(response, limit, skip):
     documents = await database.fetch_all(query)
     pg_query_time = (time.time() - start_time) * 1000
 
-    included = process_aggregations(response.get("aggregations", {}))
+    included = process_aggregations(response.get("aggregations", {}), search_criteria)
 
     return {
         "status": "success",
@@ -115,7 +131,7 @@ async def process_search_response(response, limit, skip):
         "included": included
     }
 
-def process_aggregations(aggregations):
+def process_aggregations(aggregations, search_criteria):
     """Transform Elasticsearch aggregations into JSON:API includes."""
     return [
         {
@@ -131,7 +147,7 @@ def process_aggregations(aggregations):
                             "hits": bucket["doc_count"]
                         },
                         "links": {
-                            "self": f"{os.getenv('APPLICATION_URL')}/api/v1/search?fq%5B{agg_name}%5D%5B%5D={bucket['key']}&q=&search_field=all_fields"
+                            "self": generate_facet_link(agg_name, bucket["key"], search_criteria)
                         }
                     }
                     for bucket in agg_data["buckets"]
@@ -139,4 +155,17 @@ def process_aggregations(aggregations):
             }
         }
         for agg_name, agg_data in aggregations.items()
-    ] 
+    ]
+
+def generate_facet_link(agg_name, facet_value, search_criteria):
+    """Generate a link for a facet with current search parameters."""
+    base_url = os.getenv('APPLICATION_URL') + "/api/v1/search"
+    query_params = {
+        "q": search_criteria["query"] or "",
+        "search_field": "all_fields",
+        **{f"fq[{key}][]": value for key, values in search_criteria["filters"].items() for value in (values if isinstance(values, list) else [values])},
+        f"fq[{agg_name}][]": facet_value
+    }
+    query_string = "&".join(f"{key}={value}" for key, value in query_params.items())
+    return f"{base_url}?{query_string}"
+  

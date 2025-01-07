@@ -55,3 +55,7 @@ docker compose up -d
 - [ ] Implement fielded search
 - [ ] Implement autocomplete
 - [ ] Implement suggestions
+- [ ] Implement pagination
+- [ ] Implement spelling suggestions
+- [ ] Implement search constraints
+- [ ] 
