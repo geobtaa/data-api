@@ -4,6 +4,7 @@ from db.database import database
 from db.models import geoblacklight_development
 import os
 import time
+from sqlalchemy.sql import text
 
 def get_search_criteria(query: str, fq: dict, skip: int, limit: int):
     """Return the currently applied search criteria."""
@@ -20,6 +21,7 @@ def get_search_criteria(query: str, fq: dict, skip: int, limit: int):
 async def search_documents(query: str = None, fq: dict = None, skip: int = 0, limit: int = 20):
     """Search documents in Elasticsearch with optional filters."""
     index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
+    
     
     # Get the current search criteria
     search_criteria = get_search_criteria(query, fq, skip, limit)
@@ -98,9 +100,15 @@ async def process_search_response(response, limit, skip, search_criteria):
     document_ids = [hit["_source"]["id"] for hit in response["hits"]["hits"]]
     
     start_time = time.time()
+    # Create a CASE statement to preserve the order of document_ids
+    order_case = "CASE " + " ".join(
+        f"WHEN id = '{doc_id}' THEN {index}" for index, doc_id in enumerate(document_ids)
+    ) + " END"
+    
     query = geoblacklight_development.select().where(
         geoblacklight_development.c.id.in_(document_ids)
-    )
+    ).order_by(text(order_case))
+    
     documents = await database.fetch_all(query)
     pg_query_time = (time.time() - start_time) * 1000
 
@@ -112,11 +120,18 @@ async def process_search_response(response, limit, skip, search_criteria):
             "elasticsearch": response["took"].__str__() + "ms",
             "postgresql": f"{round(pg_query_time)}ms"
         },
-        "pagination": {
-            "total": total_hits,
-            "page_size": limit,
-            "current_page": (skip // limit) + 1,
-            "total_pages": (total_hits // limit) + (1 if total_hits % limit > 0 else 0)
+        "meta": {
+            "pages": {
+                "current_page": (skip // limit) + 1,
+                "next_page": ((skip // limit) + 2) if (skip + limit) < total_hits else None,
+                "prev_page": ((skip // limit)) if skip > 0 else None,
+                "total_pages": (total_hits // limit) + (1 if total_hits % limit > 0 else 0),
+                "limit_value": limit,
+                "offset_value": skip,
+                "total_count": total_hits,
+                "first_page?": (skip == 0),
+                "last_page?": (skip + limit) >= total_hits
+            }
         },
         "data": [
             {
