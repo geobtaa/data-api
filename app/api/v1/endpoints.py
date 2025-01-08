@@ -162,8 +162,8 @@ async def index_to_elasticsearch():
 async def search(
     request: Request,
     q: Optional[str] = Query(None, description="Search query string"),
-    skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(20, ge=1, le=100, description="Number of records to return")
+    page: int = Query(1, ge=1, description="Page number for pagination"),
+    limit: int = Query(10, ge=1, le=100, description="Number of records to return")
 ):
     """
     Search documents using Elasticsearch.
@@ -171,13 +171,16 @@ async def search(
     Parameters:
     - q: Search query string
     - fq[field][]: Filter queries as arrays, e.g. fq[resource_class_agg][]=Map
-    - skip: Number of records to skip (pagination offset)
+    - page: Page number for pagination
     - limit: Number of records to return (page size)
     
     Example:
-    /search?q=water&fq[resource_class_agg][]=Map&fq[provider_agg][]=Minnesota
+    /search?q=water&fq[resource_class_agg][]=Map&fq[provider_agg][]=Minnesota&page=2
     """
     try:
+        # Calculate skip based on page and limit
+        skip = (page - 1) * limit
+        
         # Get all query parameters
         params = dict(request.query_params)
         
