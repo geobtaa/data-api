@@ -52,12 +52,10 @@ docker compose up -d
 - [X] Search - more complex search with filters
 - [X] Search - pagination
 - [X] Search - faceting
-- [ ] Search - sorting
+- [X] Search - sorting
+- [ ] Search - autocomplete
+- [ ] Search - spelling suggestions
 - [ ] Search - fielded search
 - [ ] Search - thumbnail images
-- [ ] Search - autocomplete
-- [ ] Search - suggestions
-- [ ] Search - spelling suggestions
-- [ ] Search - search constraints
 - [ ] Item View - citations
 - [ ] Item View - Allmaps
