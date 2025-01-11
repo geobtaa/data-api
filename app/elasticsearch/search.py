@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from .client import es
 from db.database import database
 from db.models import geoblacklight_development
+from app.services.viewer_service import create_viewer_attributes  # Updated import
 import os
 import time
 from sqlalchemy.sql import text
@@ -99,6 +100,31 @@ async def process_search_response(response, limit, skip, search_criteria):
     total_hits = response["hits"]["total"]["value"]
     document_ids = [hit["_source"]["id"] for hit in response["hits"]["hits"]]
     
+    if not document_ids:
+        # Return early if there are no document IDs
+        return {
+            "status": "success",
+            "query_time": {
+                "elasticsearch": response["took"].__str__() + "ms",
+                "postgresql": "0ms"
+            },
+            "meta": {
+                "pages": {
+                    "current_page": (skip // limit) + 1,
+                    "next_page": None,
+                    "prev_page": ((skip // limit)) if skip > 0 else None,
+                    "total_pages": 0,
+                    "limit_value": limit,
+                    "offset_value": skip,
+                    "total_count": total_hits,
+                    "first_page?": True,
+                    "last_page?": True
+                }
+            },
+            "data": [],
+            "included": []
+        }
+    
     start_time = time.time()
     # Create a CASE statement to preserve the order of document_ids
     order_case = "CASE " + " ".join(
@@ -139,7 +165,10 @@ async def process_search_response(response, limit, skip, search_criteria):
                 "id": doc["id"],
                 "score": next(hit["_score"] for hit in response["hits"]["hits"] 
                             if hit["_source"]["id"] == doc["id"]),
-                "attributes": doc
+                "attributes": {
+                    **doc,  # Existing attributes
+                    **create_viewer_attributes(doc)  # Merging viewer attributes
+                }
             }
             for doc in documents
         ],

@@ -48,14 +48,16 @@ docker compose up -d
 
 ## TODO
 
-- [ ] Implement basic search across all text fields
-- [ ] Implement more complex search with filters
-- [ ] Implement faceting
-- [ ] Implement sorting
-- [ ] Implement fielded search
-- [ ] Implement autocomplete
-- [ ] Implement suggestions
-- [ ] Implement pagination
-- [ ] Implement spelling suggestions
-- [ ] Implement search constraints
-- [ ] 
+- [X] Search - basic search across all text fields
+- [X] Search - more complex search with filters
+- [X] Search - pagination
+- [X] Search - faceting
+- [ ] Search - sorting
+- [ ] Search - fielded search
+- [ ] Search - thumbnail images
+- [ ] Search - autocomplete
+- [ ] Search - suggestions
+- [ ] Search - spelling suggestions
+- [ ] Search - search constraints
+- [ ] Item View - citations
+- [ ] Item View - Allmaps

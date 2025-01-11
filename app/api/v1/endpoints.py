@@ -2,32 +2,13 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from db.database import database
 from db.models import geoblacklight_development
 from sqlalchemy import select, func
-from ...viewers import ItemViewer
 import json
 from ...elasticsearch import index_documents, search_documents
+from ...services.viewer_service import create_viewer_attributes
 from typing import Optional, Dict, List
+from urllib.parse import parse_qs
 
 router = APIRouter()
-
-def parse_references(document: Dict) -> Dict:
-    """Parse references from the document."""
-    try:
-        references = json.loads(document["dct_references_s"]) if document["dct_references_s"] else {}
-        if document["locn_geometry"]:
-            references["locn_geometry"] = document["locn_geometry"]
-        return references
-    except json.JSONDecodeError:
-        return {}
-
-def create_viewer_attributes(document: Dict) -> Dict:
-    """Create viewer attributes from the document."""
-    references = parse_references(document)
-    viewer = ItemViewer(references)
-    return {
-        "ui_viewer_protocol": viewer.viewer_protocol(),
-        "ui_viewer_endpoint": viewer.viewer_endpoint(),
-        "ui_viewer_geometry": viewer.viewer_geometry()
-    }
 
 @router.get("/documents/{document_id}")
 async def read_item(document_id: str):
@@ -151,8 +132,10 @@ async def search(
 ):
     try:
         skip = (page - 1) * limit
-        params = dict(request.query_params)
-        filter_query = extract_filter_queries(params)
+        # Get the raw query string and parse it
+        query_string = str(request.query_params)
+        params = parse_qs(query_string)
+        filter_query = extract_filter_queries(query_string)
 
         results = await search_documents(
             query=q,
@@ -167,10 +150,13 @@ async def search(
 def extract_filter_queries(params: Dict) -> Dict:
     """Extract filter queries from request parameters."""
     filter_query = {}
+    # Parse the raw query string to handle multiple values
+    raw_params = parse_qs(str(params))
+    
     agg_to_field = {
         'spatial_agg': 'dct_spatial_sm',
-        'resource_class_agg': 'gbl_resourceclass_sm',
         'resource_type_agg': 'gbl_resourcetype_sm',
+        'resource_class_agg': 'gbl_resourceclass_sm',
         'index_year_agg': 'gbl_indexyear_im',
         'language_agg': 'dct_language_sm',
         'creator_agg': 'dct_creator_sm',
@@ -178,12 +164,13 @@ def extract_filter_queries(params: Dict) -> Dict:
         'access_rights_agg': 'dct_accessrights_sm',
         'georeferenced_agg': 'gbl_georeferenced_b'
     }
-    for key in params:
+
+    for key, values in raw_params.items():
         if key.startswith('fq[') and key.endswith('][]'):
-            field = key[3:-3]
+            field = key[3:-3]  # Remove 'fq[' and '[]'
             if field in agg_to_field:
                 es_field = agg_to_field[field]
-                values = params.getlist(key)
-                if values:
+                if values:  # values is already a list from parse_qs
                     filter_query[es_field] = values
+
     return filter_query
