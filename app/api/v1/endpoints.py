@@ -7,6 +7,7 @@ from ...elasticsearch import index_documents, search_documents
 from ...services.viewer_service import create_viewer_attributes
 from typing import Optional, Dict, List
 from urllib.parse import parse_qs
+from .shared import SortOption, SORT_MAPPINGS
 
 router = APIRouter()
 
@@ -128,11 +129,11 @@ async def search(
     request: Request,
     q: Optional[str] = Query(None, description="Search query string"),
     page: int = Query(1, ge=1, description="Page number for pagination"),
-    limit: int = Query(10, ge=1, le=100, description="Number of records to return")
+    limit: int = Query(10, ge=1, le=100, description="Number of records to return"),
+    sort: SortOption = Query(SortOption.RELEVANCE, description="Sort option")
 ):
     try:
         skip = (page - 1) * limit
-        # Get the raw query string and parse it
         query_string = str(request.query_params)
         params = parse_qs(query_string)
         filter_query = extract_filter_queries(query_string)
@@ -141,7 +142,8 @@ async def search(
             query=q,
             fq=filter_query,
             skip=skip,
-            limit=limit
+            limit=limit,
+            sort=SORT_MAPPINGS[sort]
         )
         return results
     except Exception as e:

@@ -2,11 +2,21 @@ INDEX_MAPPING = {
     "mappings": {
         "properties": {
             "id": {"type": "keyword"},
-            "dct_title_s": {"type": "text"},
+            "dct_title_s": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "normalizer": "lowercase"
+                    }
+                }
+            },
             "dct_spatial_sm": {"type": "keyword"},
             "gbl_resourceclass_sm": {"type": "keyword"},
             "gbl_resourcetype_sm": {"type": "keyword"},
-            "gbl_indexyear_im": {"type": "integer"},
+            "gbl_indexyear_im": {
+                "type": "integer"
+            },
             "dct_language_sm": {"type": "keyword"},
             "dct_creator_sm": {"type": "keyword"},
             "schema_provider_s": {"type": "keyword"},
@@ -62,7 +72,16 @@ INDEX_MAPPING = {
     "settings": {
         "index": {
             "number_of_shards": 1,
-            "number_of_replicas": 0
+            "number_of_replicas": 0,
+            "analysis": {
+                "normalizer": {
+                    "lowercase": {
+                        "type": "custom",
+                        "char_filter": [],
+                        "filter": ["lowercase"]
+                    }
+                }
+            }
         }
     }
 } 

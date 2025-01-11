@@ -6,8 +6,9 @@ from app.services.viewer_service import create_viewer_attributes  # Updated impo
 import os
 import time
 from sqlalchemy.sql import text
+from urllib.parse import urlencode
 
-def get_search_criteria(query: str, fq: dict, skip: int, limit: int):
+def get_search_criteria(query: str, fq: dict, skip: int, limit: int, sort: list = None):
     """Return the currently applied search criteria."""
     return {
         "query": query,
@@ -16,16 +17,21 @@ def get_search_criteria(query: str, fq: dict, skip: int, limit: int):
             "skip": skip,
             "limit": limit
         },
-        "sort": [{"_score": "desc"}]
+        "sort": sort or [{"_score": "desc"}]
     }
 
-async def search_documents(query: str = None, fq: dict = None, skip: int = 0, limit: int = 20):
-    """Search documents in Elasticsearch with optional filters."""
+async def search_documents(
+    query: str = None, 
+    fq: dict = None, 
+    skip: int = 0, 
+    limit: int = 20,
+    sort: list = None
+):
+    """Search documents in Elasticsearch with optional filters and sorting."""
     index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
     
-    
     # Get the current search criteria
-    search_criteria = get_search_criteria(query, fq, skip, limit)
+    search_criteria = get_search_criteria(query, fq, skip, limit, sort)
     print("Current Search Criteria:", search_criteria)
     
     # Construct the filter query
@@ -33,12 +39,10 @@ async def search_documents(query: str = None, fq: dict = None, skip: int = 0, li
     if fq:
         for field, values in fq.items():
             if isinstance(values, list):
-                # Handle multiple values for a field
                 filter_clauses.append({
                     "terms": {field: values}
                 })
             else:
-                # Handle single value
                 filter_clauses.append({
                     "term": {field: values}
                 })
@@ -51,8 +55,8 @@ async def search_documents(query: str = None, fq: dict = None, skip: int = 0, li
                         "multi_match": {
                             "query": query,
                             "fields": [
-                                "dct_title_s^3",            # Boost title matches
-                                "dct_description_sm^2",    # Boost description matches
+                                "dct_title_s^3",
+                                "dct_description_sm^2",
                                 "dct_creator_sm",
                                 "dct_publisher_sm",
                                 "dct_subject_sm",
@@ -63,12 +67,12 @@ async def search_documents(query: str = None, fq: dict = None, skip: int = 0, li
                         }
                     }
                 ],
-                "filter": filter_clauses  # Add filter clauses here
+                "filter": filter_clauses
             }
         },
         "from": skip,
         "size": limit,
-        "sort": [{"_score": "desc"}],
+        "sort": sort or [{"_score": "desc"}],  # Use provided sort or default to relevance
         "aggs": {
             "spatial_agg": {"terms": {"field": "dct_spatial_sm"}},
             "resource_class_agg": {"terms": {"field": "gbl_resourceclass_sm"}},
@@ -94,6 +98,77 @@ async def search_documents(query: str = None, fq: dict = None, skip: int = 0, li
     except Exception as e:
         print(f"Search error: {e}")
         raise HTTPException(status_code=500, detail="Search operation failed")
+
+def get_sort_options(search_criteria):
+    """Generate sort options for the response."""
+    base_url = os.getenv('APPLICATION_URL') + "/api/v1/search"
+    current_params = {
+        "q": search_criteria["query"] or "",
+        "search_field": "all_fields"
+    }
+    
+    # Add any existing filters to the params
+    if search_criteria["filters"]:
+        for field, values in search_criteria["filters"].items():
+            if isinstance(values, list):
+                for value in values:
+                    current_params[f"fq[{field}][]"] = value
+            else:
+                current_params[f"fq[{field}][]"] = values
+
+    sort_options = [
+        {
+            "type": "sort",
+            "id": "relevance",
+            "attributes": {
+                "label": "Relevance"
+            },
+            "links": {
+                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'relevance'}, doseq=True)}"
+            }
+        },
+        {
+            "type": "sort",
+            "id": "year_desc",
+            "attributes": {
+                "label": "Year (Newest first)"
+            },
+            "links": {
+                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'year_desc'}, doseq=True)}"
+            }
+        },
+        {
+            "type": "sort",
+            "id": "year_asc",
+            "attributes": {
+                "label": "Year (Oldest first)"
+            },
+            "links": {
+                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'year_asc'}, doseq=True)}"
+            }
+        },
+        {
+            "type": "sort",
+            "id": "title_asc",
+            "attributes": {
+                "label": "Title (A-Z)"
+            },
+            "links": {
+                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'title_asc'}, doseq=True)}"
+            }
+        },
+        {
+            "type": "sort",
+            "id": "title_desc",
+            "attributes": {
+                "label": "Title (Z-A)"
+            },
+            "links": {
+                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'title_desc'}, doseq=True)}"
+            }
+        }
+    ]
+    return sort_options
 
 async def process_search_response(response, limit, skip, search_criteria):
     """Process Elasticsearch response and fetch documents from PostgreSQL."""
@@ -138,7 +213,10 @@ async def process_search_response(response, limit, skip, search_criteria):
     documents = await database.fetch_all(query)
     pg_query_time = (time.time() - start_time) * 1000
 
-    included = process_aggregations(response.get("aggregations", {}), search_criteria)
+    included = [
+        *process_aggregations(response.get("aggregations", {}), search_criteria),
+        *get_sort_options(search_criteria)
+    ]
 
     return {
         "status": "success",
@@ -166,8 +244,8 @@ async def process_search_response(response, limit, skip, search_criteria):
                 "score": next(hit["_score"] for hit in response["hits"]["hits"] 
                             if hit["_source"]["id"] == doc["id"]),
                 "attributes": {
-                    **doc,  # Existing attributes
-                    **create_viewer_attributes(doc)  # Merging viewer attributes
+                    **doc,
+                    **create_viewer_attributes(doc)
                 }
             }
             for doc in documents
