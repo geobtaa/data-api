@@ -53,7 +53,7 @@ docker compose up -d
 - [X] Search - pagination
 - [X] Search - faceting
 - [X] Search - sorting
-- [ ] Search - autocomplete
+- [X] Search - autocomplete
 - [ ] Search - spelling suggestions
 - [ ] Search - fielded search
 - [ ] Search - thumbnail images
