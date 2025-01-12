@@ -74,6 +74,7 @@ async def search_documents(
         "size": limit,
         "sort": sort or [{"_score": "desc"}],  # Use provided sort or default to relevance
         "aggs": {
+            "id_agg": {"terms": {"field": "id"}},
             "spatial_agg": {"terms": {"field": "dct_spatial_sm"}},
             "resource_class_agg": {"terms": {"field": "gbl_resourceclass_sm"}},
             "resource_type_agg": {"terms": {"field": "gbl_resourcetype_sm"}},

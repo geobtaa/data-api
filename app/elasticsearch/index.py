@@ -53,6 +53,68 @@ def process_document(doc_dict):
             except Exception as e:
                 print(f"Error processing dcat_bbox: {e}")
     
+    # Clean and prepare suggestion inputs
+    suggestion_inputs = []
+    
+    # Add title if it exists
+    if title := doc_dict.get("dct_title_s"):
+        suggestion_inputs.append(title)
+    
+    # Add creators
+    if creators := doc_dict.get("dct_creator_sm"):
+        if isinstance(creators, list):
+            suggestion_inputs.extend(creators)
+        else:
+            suggestion_inputs.append(creators)
+    
+    # Add publishers
+    if publishers := doc_dict.get("dct_publisher_sm"):
+        if isinstance(publishers, list):
+            suggestion_inputs.extend(publishers)
+        else:
+            suggestion_inputs.append(publishers)
+    
+    # Add provider
+    if provider := doc_dict.get("schema_provider_s"):
+        suggestion_inputs.append(provider)
+    
+    # Add subjects
+    if subjects := doc_dict.get("dct_subject_sm"):
+        if isinstance(subjects, list):
+            suggestion_inputs.extend(subjects)
+        else:
+            suggestion_inputs.append(subjects)
+    
+    # Add spatial
+    if spatial := doc_dict.get("dct_spatial_sm"):
+        if isinstance(spatial, list):
+            suggestion_inputs.extend(spatial)
+        else:
+            suggestion_inputs.append(spatial)
+    
+    # Add keywords
+    if keywords := doc_dict.get("dcat_keyword_sm"):
+        if isinstance(keywords, list):
+            suggestion_inputs.extend(keywords)
+        else:
+            suggestion_inputs.append(keywords)
+    
+    # Filter out None values and empty strings
+    suggestion_inputs = [s for s in suggestion_inputs if s and str(s).strip()]
+    
+    # Get resource classes, ensuring it's a list and has at least one value
+    resource_classes = doc_dict.get("gbl_resourceclass_sm", [])
+    if isinstance(resource_classes, str):
+        resource_classes = [resource_classes]
+    if not resource_classes:
+        resource_classes = ["none"]
+
+    # Add suggestion field with cleaned data - removed contexts
+    doc_dict["suggest"] = {
+        "input": suggestion_inputs
+    }
+
+    print(f"Indexing suggestions for {doc_dict['id']}: {doc_dict['suggest']}")  # Debug output
     return doc_dict
 
 def process_geometry(geometry):

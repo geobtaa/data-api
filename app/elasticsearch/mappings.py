@@ -66,7 +66,14 @@ INDEX_MAPPING = {
             "dcat_bbox": {"type": "geo_shape"},
             "dcat_centroid": {"type": "geo_point"},
             "dct_references_s": {"type": "object"},
-            "gbl_mdmodified_dt": {"type": "date"}
+            "gbl_mdmodified_dt": {"type": "date"},
+            "suggest": {
+                "type": "completion",
+                "analyzer": "simple",
+                "preserve_separators": True,
+                "preserve_position_increments": True,
+                "max_input_length": 50
+            }
         }
     },
     "settings": {

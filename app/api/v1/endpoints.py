@@ -8,6 +8,8 @@ from ...services.viewer_service import create_viewer_attributes
 from typing import Optional, Dict, List
 from urllib.parse import parse_qs
 from .shared import SortOption, SORT_MAPPINGS
+import os
+from ...elasticsearch.client import es
 
 router = APIRouter()
 
@@ -156,6 +158,7 @@ def extract_filter_queries(params: Dict) -> Dict:
     raw_params = parse_qs(str(params))
     
     agg_to_field = {
+        'id_agg': 'id',
         'spatial_agg': 'dct_spatial_sm',
         'resource_type_agg': 'gbl_resourcetype_sm',
         'resource_class_agg': 'gbl_resourceclass_sm',
@@ -176,3 +179,89 @@ def extract_filter_queries(params: Dict) -> Dict:
                     filter_query[es_field] = values
 
     return filter_query
+
+@router.get("/suggest")
+async def suggest(
+    q: str = Query(..., description="Query string for suggestions"),
+    resource_class: Optional[str] = Query(None, description="Filter suggestions by resource class"),
+    size: int = Query(5, ge=1, le=20, description="Number of suggestions to return")
+):
+    """Get autocomplete suggestions."""
+    try:
+        # Simplified query without contexts first
+        suggest_query = {
+            "_source": [
+                "dct_title_s",
+                "dct_creator_sm",
+                "dct_publisher_sm",
+                "schema_provider_s",
+                "dct_subject_sm",
+                "dct_spatial_sm"
+            ],
+            "suggest": {
+                "my-suggestion": {  # Changed name to be more explicit
+                    "prefix": q,
+                    "completion": {
+                        "field": "suggest",
+                        "size": size,
+                        "skip_duplicates": True,
+                        "fuzzy": {
+                            "fuzziness": "AUTO"
+                        }
+                    }
+                }
+            }
+        }
+
+        index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
+        
+        # Print the query for debugging
+        print("Suggest Query:", json.dumps(suggest_query, indent=2))
+        
+        response = await es.search(
+            index=index_name,
+            body=suggest_query
+        )
+        
+        # Convert response to dict for serialization
+        response_dict = response.body
+        
+        # Print the full response for debugging
+        print("ES Response:", json.dumps(response_dict, indent=2))
+
+        suggestions = []
+        seen_ids = set()  # Track seen suggestion IDs
+        if response_dict.get("suggest", {}).get("my-suggestion"):
+            for suggestion in response_dict["suggest"]["my-suggestion"]:
+                print(f"Processing suggestion: {suggestion}")  # Debug print
+                if options := suggestion.get("options", []):
+                    for option in options:
+                        suggestion_id = option["_id"]
+                        if suggestion_id not in seen_ids:  # Check for duplicates
+                            seen_ids.add(suggestion_id)
+                            suggestions.append({
+                                "type": "suggestion",
+                                "id": suggestion_id,
+                                "attributes": {
+                                    "text": option.get("text", ""),
+                                    "title": option.get("_source", {}).get("dct_title_s", ""),
+                                    "score": option.get("_score", 0)
+                                }
+                            })
+
+        return {
+            "data": suggestions,
+            "meta": {
+                "query": q,
+                "resource_class": resource_class,
+                "es_query": suggest_query,
+                "es_response": response_dict
+            }
+        }
+
+    except Exception as e:
+        print(f"Suggestion error: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Suggestion error: {str(e)}\nQuery: {suggest_query}"
+        )
