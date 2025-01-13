@@ -215,11 +215,7 @@ async def process_search_response(response, limit, skip, search_criteria):
     documents = await database.fetch_all(query)
     processed_documents = []
     
-    for doc in documents:
-        # Create image service for each document
-        image_service = ImageService(dict(doc))
-        thumbnail_url = image_service.get_thumbnail_url()
-        
+    for doc in documents:        
         processed_documents.append({
             "type": "document",
             "id": doc["id"],
@@ -227,8 +223,7 @@ async def process_search_response(response, limit, skip, search_criteria):
                         if hit["_source"]["id"] == doc["id"]),
             "attributes": {
                 **doc,
-                **create_viewer_attributes(doc),
-                "thumbnail_url": thumbnail_url  # Add thumbnail URL
+                **create_viewer_attributes(doc)
             }
         })
 

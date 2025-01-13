@@ -14,6 +14,13 @@ from ...services.image_service import ImageService
 
 router = APIRouter()
 
+def add_thumbnail_url(document: Dict) -> Dict:
+    """Add the ui_thumbnail_url to the document attributes."""
+    image_service = ImageService(document)
+    thumbnail_url = image_service.get_thumbnail_url()
+    document["ui_thumbnail_url"] = thumbnail_url
+    return document
+
 @router.get("/documents/{document_id}")
 async def read_item(document_id: str):
     query = geoblacklight_development.select().where(
@@ -29,15 +36,8 @@ async def read_item(document_id: str):
     
     viewer_attributes = create_viewer_attributes(doc_dict)
     
-    # Debug print
-    print(f"Document references: {doc_dict['dct_references_s']}")
-    
-    # Create image service and get thumbnail URL
-    image_service = ImageService(doc_dict)
-    thumbnail_url = image_service.get_thumbnail_url()
-    
-    # Debug print
-    print(f"Generated thumbnail URL: {thumbnail_url}")
+    # Add thumbnail URL
+    doc_dict = add_thumbnail_url(doc_dict)
 
     json_api_response = {
         "data": {
@@ -49,97 +49,25 @@ async def read_item(document_id: str):
                     for key, value in doc_dict.items()
                     if key != "id"
                 },
-                **viewer_attributes,
-                "thumbnail_url": thumbnail_url
+                **viewer_attributes
             },
         }
     }
 
     return json_api_response
 
-async def get_total_count(q: Optional[str] = None) -> int:
-    total_count_query = select(func.count()).select_from(geoblacklight_development)
-    if q:
-        total_count_query = total_count_query.where(
-            geoblacklight_development.c.dct_title_s.ilike(f"%{q}%")
-        )
-    return await database.fetch_val(total_count_query)
-
-async def get_paginated_documents(skip: int, limit: int, q: Optional[str] = None) -> List[Dict]:
-    query = geoblacklight_development.select().offset(skip).limit(limit)
-    if q:
-        query = query.where(geoblacklight_development.c.dct_title_s.ilike(f"%{q}%"))
-    return await database.fetch_all(query)
-
-def calculate_pagination_details(skip: int, limit: int, total_count: int) -> Dict:
-    current_page = (skip // limit) + 1
-    total_pages = (total_count // limit) + (1 if total_count % limit > 0 else 0)
-    return {
-        "current_page": current_page,
-        "total_pages": total_pages,
-        "next_page": current_page + 1 if current_page < total_pages else None,
-        "prev_page": current_page - 1 if current_page > 1 else None
-    }
-
 @router.get("/documents/")
-async def read_documents(skip: int = 0, limit: int = 20, q: Optional[str] = None):
-    if limit > 100:
-        raise HTTPException(
-            status_code=400,
-            detail="The maximum number of rows that can be requested is 100."
-        )
+async def list_documents(skip: int = 0, limit: int = 10):
+    query = geoblacklight_development.select().offset(skip).limit(limit)
+    documents = await database.fetch_all(query)
 
-    total_count = await get_total_count(q)
-    documents = await get_paginated_documents(skip, limit, q)
-    pagination_details = calculate_pagination_details(skip, limit, total_count)
+    processed_documents = []
+    for document in documents:
+        doc_dict = dict(document)
+        doc_dict = add_thumbnail_url(doc_dict)
+        processed_documents.append(doc_dict)
 
-    base_url = "http://localhost:8000/api/v1/documents"
-    links = {
-        "self": f"{base_url}?skip={skip}&limit={limit}",
-        "next": f"{base_url}?skip={skip + limit}&limit={limit}" if pagination_details["next_page"] else None,
-        "last": (
-            f"{base_url}?skip={(pagination_details['total_pages'] - 1) * limit}&limit={limit}"
-            if pagination_details["total_pages"] > 1
-            else None
-        ),
-    }
-
-    json_api_response = {
-        "data": [
-            {
-                "type": "document",
-                "id": str(document["id"]),
-                "attributes": {
-                    **{
-                        key: (json.loads(value) if key == "dct_references_s" else value)
-                        for key, value in dict(document).items()
-                        if key != "id"
-                    },
-                    **create_viewer_attributes(document)
-                },
-            }
-            for document in documents
-        ],
-        "meta": {
-            "pages": {
-                **pagination_details,
-                "limit_value": limit,
-                "offset_value": skip,
-                "total_count": total_count,
-                "first_page?": pagination_details["current_page"] == 1,
-                "last_page?": pagination_details["current_page"] == pagination_details["total_pages"],
-            }
-        },
-        "links": links,
-    }
-
-    return json_api_response
-
-@router.post("/index")
-async def index_to_elasticsearch():
-    """Index all documents from PostgreSQL to Elasticsearch."""
-    result = await index_documents()
-    return result
+    return {"data": processed_documents}
 
 @router.get("/search")
 async def search(
@@ -162,6 +90,11 @@ async def search(
             limit=limit,
             sort=SORT_MAPPINGS[sort]
         )
+
+        # Process each document to add the thumbnail URL
+        for document in results["data"]:
+            document["attributes"] = add_thumbnail_url(document["attributes"])
+
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
