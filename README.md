@@ -54,8 +54,8 @@ docker compose up -d
 - [X] Search - faceting
 - [X] Search - sorting
 - [X] Search - autocomplete
+- [X] Search - thumbnail images (needs improvements)
 - [ ] Search - spelling suggestions
 - [ ] Search - fielded search
-- [ ] Search - thumbnail images
 - [ ] Item View - citations
-- [ ] Item View - Allmaps
+- [ ] Item View - allmaps integration
