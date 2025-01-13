@@ -10,6 +10,7 @@ from urllib.parse import parse_qs
 from .shared import SortOption, SORT_MAPPINGS
 import os
 from ...elasticsearch.client import es
+from ...services.image_service import ImageService
 
 router = APIRouter()
 
@@ -23,19 +24,33 @@ async def read_item(document_id: str):
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    viewer_attributes = create_viewer_attributes(document)
+    # Convert Record to dict for easier handling
+    doc_dict = dict(document)
+    
+    viewer_attributes = create_viewer_attributes(doc_dict)
+    
+    # Debug print
+    print(f"Document references: {doc_dict['dct_references_s']}")
+    
+    # Create image service and get thumbnail URL
+    image_service = ImageService(doc_dict)
+    thumbnail_url = image_service.get_thumbnail_url()
+    
+    # Debug print
+    print(f"Generated thumbnail URL: {thumbnail_url}")
 
     json_api_response = {
         "data": {
             "type": "document",
-            "id": str(document["id"]),
+            "id": str(doc_dict["id"]),
             "attributes": {
                 **{
                     key: (json.loads(value) if key == "dct_references_s" else value)
-                    for key, value in dict(document).items()
+                    for key, value in doc_dict.items()
                     if key != "id"
                 },
-                **viewer_attributes
+                **viewer_attributes,
+                "thumbnail_url": thumbnail_url
             },
         }
     }
