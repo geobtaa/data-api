@@ -164,7 +164,7 @@ async def suggest(
         index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
         
         # Print the query for debugging
-        print("Suggest Query:", json.dumps(suggest_query, indent=2))
+        # print("Suggest Query:", json.dumps(suggest_query, indent=2))
         
         response = await es.search(
             index=index_name,
@@ -175,13 +175,13 @@ async def suggest(
         response_dict = response.body
         
         # Print the full response for debugging
-        print("ES Response:", json.dumps(response_dict, indent=2))
+        #print("ES Response:", json.dumps(response_dict, indent=2))
 
         suggestions = []
         seen_ids = set()  # Track seen suggestion IDs
         if response_dict.get("suggest", {}).get("my-suggestion"):
             for suggestion in response_dict["suggest"]["my-suggestion"]:
-                print(f"Processing suggestion: {suggestion}")  # Debug print
+                # print(f"Processing suggestion: {suggestion}")  # Debug print
                 if options := suggestion.get("options", []):
                     for option in options:
                         suggestion_id = option["_id"]
@@ -208,7 +208,7 @@ async def suggest(
         }
 
     except Exception as e:
-        print(f"Suggestion error: {e}")
+        # print(f"Suggestion error: {e}")
         raise HTTPException(
             status_code=500, 
             detail=f"Suggestion error: {str(e)}\nQuery: {suggest_query}"

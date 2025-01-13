@@ -114,7 +114,7 @@ def process_document(doc_dict):
         "input": suggestion_inputs
     }
 
-    print(f"Indexing suggestions for {doc_dict['id']}: {doc_dict['suggest']}")  # Debug output
+    # print(f"Indexing suggestions for {doc_dict['id']}: {doc_dict['suggest']}")  # Debug output
     return doc_dict
 
 def process_geometry(geometry):

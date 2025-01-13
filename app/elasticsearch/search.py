@@ -33,7 +33,7 @@ async def search_documents(
     
     # Get the current search criteria
     search_criteria = get_search_criteria(query, fq, skip, limit, sort)
-    print("Current Search Criteria:", search_criteria)
+    # print("Current Search Criteria:", search_criteria)
     
     # Construct the filter query
     filter_clauses = []
@@ -98,7 +98,7 @@ async def search_documents(
         return await process_search_response(response, limit, skip, search_criteria)
         
     except Exception as e:
-        print(f"Search error: {e}")
+        # print(f"Search error: {e}")
         raise HTTPException(status_code=500, detail="Search operation failed")
 
 def get_sort_options(search_criteria):

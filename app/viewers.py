@@ -83,13 +83,13 @@ class ItemViewer:
 
         geometry = self.references['locn_geometry']
         
-        print(geometry)
+        # print(geometry)
         # Check if it's an ENVELOPE format
 
         
         envelope_match = re.match(r'ENVELOPE\(([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\)', geometry)
 
-        print(envelope_match)
+        # print(envelope_match)
 
         if envelope_match:
             # Extract coordinates from ENVELOPE(minx,maxx,maxy,miny)

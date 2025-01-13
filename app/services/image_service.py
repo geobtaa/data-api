@@ -17,7 +17,7 @@ class ImageService:
         self.logger.addHandler(log_handler)
         self.logger.setLevel(logging.INFO)
 
-        print(f"Document WXS: {self.document.get('gbl_wxsidentifier_s')}")
+        # print(f"Document WXS: {self.document.get('gbl_wxsidentifier_s')}")
 
     def get_iiif_manifest_thumbnail(self, manifest_url: str) -> Optional[str]:
         """
