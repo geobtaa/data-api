@@ -1,4 +1,4 @@
-from sqlalchemy import Table, Column, String, Text, ARRAY, Boolean, TIMESTAMP, MetaData
+from sqlalchemy import Table, Column, String, Text, ARRAY, Boolean, TIMESTAMP, MetaData, Integer
 
 metadata = MetaData()
 
@@ -25,3 +25,51 @@ geoportal_development = Table(
     Column('date_created_dtsi', TIMESTAMP),
     Column('date_modified_dtsi', TIMESTAMP)
 )
+
+geoblacklight_development = Table(
+    'geoblacklight_development',
+    metadata,
+    Column('id', String, primary_key=True),
+    Column('dct_title_s', String),
+    Column('dct_alternative_sm', ARRAY(String)),
+    Column('dct_description_sm', ARRAY(Text)),
+    Column('dct_language_sm', ARRAY(String)),
+    Column('gbl_displaynote_sm', ARRAY(Text)),
+    Column('dct_creator_sm', ARRAY(String)),
+    Column('dct_publisher_sm', ARRAY(String)),
+    Column('schema_provider_s', String),
+    Column('gbl_resourceclass_sm', ARRAY(String)),
+    Column('gbl_resourcetype_sm', ARRAY(String)),
+    Column('dct_subject_sm', ARRAY(String)),
+    Column('dcat_theme_sm', ARRAY(String)),
+    Column('dcat_keyword_sm', ARRAY(String)),
+    Column('dct_temporal_sm', ARRAY(String)),
+    Column('dct_issued_s', String),
+    Column('gbl_indexyear_im', ARRAY(Integer)),
+    Column('gbl_daterange_drsim', ARRAY(String)),
+    Column('dct_spatial_sm', ARRAY(String)),
+    Column('locn_geometry', Text),
+    Column('dcat_bbox', String),
+    Column('dcat_centroid', String),
+    Column('dct_relation_sm', ARRAY(String)),
+    Column('pcdm_memberof_sm', ARRAY(String)),
+    Column('dct_ispartof_sm', ARRAY(String)),
+    Column('dct_source_sm', ARRAY(String)),
+    Column('dct_isversionof_sm', ARRAY(String)),
+    Column('dct_replaces_sm', ARRAY(String)),
+    Column('dct_isreplacedby_sm', ARRAY(String)),
+    Column('dct_rights_sm', ARRAY(String)),
+    Column('dct_rightsholder_sm', ARRAY(String)),
+    Column('dct_license_sm', ARRAY(Text)),
+    Column('dct_accessrights_s', String),
+    Column('dct_format_s', String),
+    Column('gbl_filesize_s', String),
+    Column('gbl_wxsidentifier_s', String),
+    Column('dct_references_s', Text),
+    Column('dct_identifier_sm', ARRAY(String)),
+    Column('gbl_mdmodified_dt', TIMESTAMP),
+    Column('gbl_mdversion_s', String),
+    Column('gbl_suppressed_b', Boolean),
+    Column('gbl_georeferenced_b', Boolean)
+)
+

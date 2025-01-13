@@ -1,8 +1,14 @@
-from typing import Dict, Optional, TypedDict
+from typing import Dict, Optional, TypedDict, Union, List
+import json
+import re
 
 class Reference(TypedDict):
     protocol: str
     endpoint: str
+
+class GeoJSON(TypedDict):
+    type: str
+    coordinates: Union[List[List[List[float]]], List[float]]
 
 class ItemViewer:
     REFERENCE_URI_TO_NAME = {
@@ -40,7 +46,7 @@ class ItemViewer:
 
     def viewer_protocol(self) -> Optional[str]:
         preference = self._viewer_preference()
-        return self.REFERENCE_URI_TO_NAME.get(preference['protocol']) if preference else None
+        return self.REFERENCE_URI_TO_NAME.get(preference['protocol']) if preference else 'geo_json'
 
     def viewer_endpoint(self) -> str:
         preference = self._viewer_preference()
@@ -69,3 +75,60 @@ class ItemViewer:
     def _get_reference(self, protocol: str) -> Optional[Reference]:
         endpoint = self.references.get(protocol)
         return {'protocol': protocol, 'endpoint': endpoint} if endpoint else None
+
+    def viewer_geometry(self) -> Optional[GeoJSON]:
+        """Convert locn_geometry to a GeoJSON object."""
+        if not self.references.get('locn_geometry'):
+            return None
+
+        geometry = self.references['locn_geometry']
+        
+        print(geometry)
+        # Check if it's an ENVELOPE format
+
+        
+        envelope_match = re.match(r'ENVELOPE\(([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\)', geometry)
+
+        print(envelope_match)
+
+        if envelope_match:
+            # Extract coordinates from ENVELOPE(minx,maxx,maxy,miny)
+            minx, maxx, maxy, miny = map(float, envelope_match.groups())
+            # Create a polygon from the envelope coordinates
+            return {
+                "type": "Polygon",
+                "coordinates": [[
+                    [minx, maxy],  # top left
+                    [minx, miny],  # bottom left
+                    [maxx, miny],  # bottom right
+                    [maxx, maxy],  # top right
+                    [minx, maxy]   # close the polygon
+                ]]
+            }
+        
+        # Check if it's a POLYGON format
+        polygon_match = re.match(r'POLYGON\(\(\s*([-\d.\s,]+)\s*\)\)', geometry)
+
+        if polygon_match:
+            # Extract coordinates from POLYGON((x1 y1, x2 y2, ..., xn yn))
+            coordinates_str = polygon_match.group(1)
+            # Split the coordinates and convert them to float pairs
+            coordinates = [
+                list(map(float, coord.split()))
+                for coord in coordinates_str.split(',')
+            ]
+            # Ensure the polygon is closed by repeating the first point at the end
+            if coordinates[0] != coordinates[-1]:
+                coordinates.append(coordinates[0])
+            return {
+                "type": "Polygon",
+                "coordinates": [coordinates]
+            }
+        
+        # Try parsing as JSON (handling escaped quotes)
+        try:
+            # Replace escaped quotes and parse
+            clean_geometry = geometry.replace('&quot;', '"')
+            return json.loads(clean_geometry)
+        except json.JSONDecodeError:
+            return None

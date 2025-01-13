@@ -40,13 +40,22 @@ Returns the API documentation.
 
 Returns a paginated list of documents.
 
+## Elasticsearch
+
+```bash
+docker compose up -d
+```
 
 ## TODO
 
-- [ ] Implement basic search across all text fields
-- [ ] Implement more complex search with filters
-- [ ] Implement faceting
-- [ ] Implement sorting
-- [ ] Implement fielded search
-- [ ] Implement autocomplete
-- [ ] Implement suggestions
+- [X] Search - basic search across all text fields
+- [X] Search - more complex search with filters
+- [X] Search - pagination
+- [X] Search - faceting
+- [X] Search - sorting
+- [X] Search - autocomplete
+- [X] Search - thumbnail images (needs improvements)
+- [ ] Search - spelling suggestions
+- [ ] Search - fielded search
+- [ ] Item View - citations
+- [ ] Item View - allmaps integration
