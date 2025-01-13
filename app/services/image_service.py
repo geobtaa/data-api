@@ -2,6 +2,7 @@ import os
 import logging
 from typing import Dict, Optional
 import json
+import requests
 
 class ImageService:
     def __init__(self, document: Dict):
@@ -17,6 +18,68 @@ class ImageService:
         self.logger.setLevel(logging.INFO)
 
         print(f"Document WXS: {self.document.get('gbl_wxsidentifier_s')}")
+
+    def get_iiif_manifest_thumbnail(self, manifest_url: str) -> Optional[str]:
+        """
+        Get thumbnail URL from IIIF Manifest.
+        
+        Args:
+            manifest_url (str): URL to the IIIF manifest
+            
+        Returns:
+            Optional[str]: Thumbnail URL or None if not found
+        """
+        try:
+            response = requests.get(manifest_url)
+            response.raise_for_status()
+            manifest_json = response.json()
+
+            # Sequences - Return the first image if it exists
+            if manifest_json.get("sequences"):
+                self.logger.debug("Image: sequences")
+                canvas = manifest_json.get("sequences", [{}])[0].get("canvases", [{}])[0]
+                image = canvas.get("images", [{}])[0].get("resource", {})
+                
+                # Handle OSU variant
+                if image.get("@id", "").find("osu") != -1:
+                    self.logger.debug("Image: sequences - OSU variant")
+                    service_id = image.get("service", {}).get("@id")
+                    if service_id:
+                        return f"{service_id}/full/400,/0/default.jpg"
+                
+                # Standard sequence image
+                if image.get("@id"):
+                    return image["@id"]
+
+            # Items - Northwestern style
+            elif manifest_json.get("items"):
+                items_path = manifest_json.get("items", [{}])[0].get("items", [{}])[0].get("items", [{}])[0]
+                
+                # Try body.id first
+                if items_path.get("body", {}).get("id"):
+                    self.logger.debug("Image: items body id")
+                    return items_path["body"]["id"]
+                
+                # Try direct id
+                elif items_path.get("id"):
+                    self.logger.debug("Image: items id")
+                    return items_path["id"]
+
+            # Thumbnail - Try various thumbnail formats
+            elif manifest_json.get("thumbnail"):
+                self.logger.debug("Image: thumbnail")
+                thumbnail = manifest_json["thumbnail"]
+                if isinstance(thumbnail, dict):
+                    return thumbnail.get("@id") or thumbnail.get("id")
+                return thumbnail
+
+            # Fallback to viewer endpoint
+            self.logger.debug("Image: failed to find thumbnail")
+            return manifest_url
+
+        except Exception as e:
+            self.logger.error(f"Error processing IIIF manifest: {e}")
+            return manifest_url
 
     def get_thumbnail_url(self) -> Optional[str]:
         """Get the appropriate thumbnail URL based on the document type."""
@@ -36,10 +99,16 @@ class ImageService:
             if "http://schema.org/thumbnailUrl" in references:
                 return references["http://schema.org/thumbnailUrl"]
 
-            # Check for IIIF
+            # Check for IIIF Manifest
+            if "https://iiif.io/api/presentation/2/context.json" in references:
+                manifest_url = references["https://iiif.io/api/presentation/2/context.json"]
+                return self.get_iiif_manifest_thumbnail(manifest_url)
+            
+            # Check for IIIF Image API
             if "http://iiif.io/api/image" in references:
                 viewer_endpoint = references["http://iiif.io/api/image"]
-                return viewer_endpoint.replace("info.json", "") + "full/max/0/default.jpg"
+                # Request a smaller thumbnail, e.g., 200 pixels wide
+                return viewer_endpoint.replace("info.json", "") + "full/400,/0/default.jpg"
             
             # Check for ESRI services
             elif "urn:x-esri:serviceType:ArcGIS#ImageMapLayer" in references:
