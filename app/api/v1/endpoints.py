@@ -69,6 +69,12 @@ async def list_documents(skip: int = 0, limit: int = 10):
 
     return {"data": processed_documents}
 
+@router.post("/index")
+async def index_to_elasticsearch():
+    """Index all documents from PostgreSQL to Elasticsearch."""
+    result = await index_documents()
+    return result
+
 @router.get("/search")
 async def search(
     request: Request,
