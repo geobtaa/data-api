@@ -60,6 +60,9 @@ docker compose up -d
 - [ ] Search - facet alpha and numerical pagination, and search within facets
 - [ ] Item View - citations
 - [ ] Item View - downloads
+- [ ] Item View - exports (Shapefile, CSV, GeoJSON)
+- [ ] Item View - code previews (Py, R, Leaflet)
+- [ ] Item View - embeds
 - [ ] Item View - allmaps integration
 - [ ] Item View - data dictionaries
 - [ ] Item View - web services
