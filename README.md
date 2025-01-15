@@ -61,7 +61,9 @@ docker compose up -d
 - [ ] Item View - citations
 - [ ] Item View - allmaps integration
 - [ ] Item View - data dictionaries
-- [ ] Gazetteer - Geonames
-- [ ] Gazetteer - Who's on First
+- [ ] Item View - web services
+- [ ] Item View - metadata
+- [ ] Gazetteer - geonames
+- [ ] Gazetteer - who's on first
 - [ ] Gazetteer - USGS Geographic Names Information System (GNIS)
 - [ ] GeoJSONs
