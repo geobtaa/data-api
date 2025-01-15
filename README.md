@@ -60,3 +60,6 @@ docker compose up -d
 - [ ] Search - facet alpha and numerical pagination, and search within facets
 - [ ] Item View - citations
 - [ ] Item View - allmaps integration
+- [ ] Gazetteer - Geonames
+- [ ] Gazetteer - Who's on First
+- [ ] Gazetteer - USGS Geographic Names Information System (GNIS)
