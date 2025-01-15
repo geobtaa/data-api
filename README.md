@@ -63,3 +63,4 @@ docker compose up -d
 - [ ] Gazetteer - Geonames
 - [ ] Gazetteer - Who's on First
 - [ ] Gazetteer - USGS Geographic Names Information System (GNIS)
+- [ ] GeoJSONs
