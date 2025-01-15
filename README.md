@@ -56,7 +56,7 @@ docker compose up -d
 - [X] Search - autocomplete
 - [X] Search - thumbnail images (needs improvements)
 - [ ] Search - spelling suggestions
-- [ ] Search - fielded search
+- [ ] Search - advanced/fielded search
 - [ ] Search - facet alpha and numerical pagination, and search within facets
 - [ ] Item View - citations
 - [ ] Item View - downloads
