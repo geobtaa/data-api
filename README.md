@@ -57,5 +57,6 @@ docker compose up -d
 - [X] Search - thumbnail images (needs improvements)
 - [ ] Search - spelling suggestions
 - [ ] Search - fielded search
+- [ ] Search - facet alpha and numerical pagination, and search within facets
 - [ ] Item View - citations
 - [ ] Item View - allmaps integration
