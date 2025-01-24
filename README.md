@@ -15,36 +15,34 @@ Configure the database:
 cp .env.example .env
 ```
 
-Run the server:
+Run the Docker containers:
+
+* [ParadeDB](https://www.paradedb.com/)
+* [Elasticsearch](https://www.elastic.co/elasticsearch/)
+
+```bash
+docker compose up -d
+```
+
+Import the GeoBlacklight test fixture data:
+```bash
+cd data
+gunzip geoblacklight_development.gz
+psql -h localhost -p 2345 -U postgres -d geoblacklight_development -f geoblacklight_development
+```
+
+Run the API server:
 ```bash
 uvicorn main:app --reload
 ```
 
 ## Endpoints
 
-### GET /openapi.json
-
-[http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
-
-Returns the OpenAPI schema.
-
 ### GET /docs
 
 [http://localhost:8000/docs](http://localhost:8000/docs)
 
 Returns the API documentation.
-
-### GET /api/v1/documents
-
-[http://localhost:8000/api/v1/documents](http://localhost:8000/api/v1/documents)
-
-Returns a paginated list of documents.
-
-## Elasticsearch
-
-```bash
-docker compose up -d
-```
 
 ## TODO
 
