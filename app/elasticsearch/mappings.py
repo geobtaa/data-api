@@ -22,46 +22,16 @@ INDEX_MAPPING = {
             "schema_provider_s": {"type": "keyword"},
             "dct_accessrights_sm": {"type": "keyword"},
             "gbl_georeferenced_b": {"type": "boolean"},
-            "dct_alternative_sm": {
-                "type": "text",
-                "store": False
-            },
-            "dct_description_sm": {
-                "type": "text",
-                "store": False
-            },                
-            "gbl_displaynote_sm": {
-                "type": "text",
-                "store": False
-            },
-            "dct_publisher_sm": {
-                "type": "text",
-                "store": False
-            },
-            "dct_subject_sm": {
-                "type": "text",
-                "store": False
-            },
-            "dcat_theme_sm": {
-                "type": "text",
-                "store": False
-            },
-            "dcat_keyword_sm": {
-                "type": "text",
-                "store": False
-            },
-            "dct_temporal_sm": {
-                "type": "text",
-                "store": False
-            },
-            "dct_issued_s": {
-                "type": "text",
-                "store": False
-            },
-            "gbl_daterange_drsim": {
-                "type": "text",
-                "store": False
-            },
+            "dct_alternative_sm": {"type": "text"},
+            "dct_description_sm": {"type": "text"},                
+            "gbl_displaynote_sm": {"type": "text"},
+            "dct_publisher_sm": {"type": "text"},
+            "dct_subject_sm": {"type": "text"},
+            "dcat_theme_sm": {"type": "text"},
+            "dcat_keyword_sm": {"type": "text"},
+            "dct_temporal_sm": {"type": "text"},
+            "dct_issued_s": {"type": "text"},
+            "gbl_daterange_drsim": {"type": "text"},
             "locn_geometry": {"type": "geo_shape"},
             "dcat_bbox": {"type": "geo_shape"},
             "dcat_centroid": {"type": "geo_point"},

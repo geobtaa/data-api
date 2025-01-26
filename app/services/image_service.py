@@ -100,8 +100,10 @@ class ImageService:
                 return references["http://schema.org/thumbnailUrl"]
 
             # Check for IIIF Manifest
-            if "https://iiif.io/api/presentation/2/context.json" in references:
-                manifest_url = references["https://iiif.io/api/presentation/2/context.json"]
+            if ("https://iiif.io/api/presentation/2/context.json" in references or
+                "http://iiif.io/api/presentation#manifest" in references):
+                manifest_url = (references.get("https://iiif.io/api/presentation/2/context.json") or
+                                references.get("http://iiif.io/api/presentation#manifest"))
                 return self.get_iiif_manifest_thumbnail(manifest_url)
             
             # Check for IIIF Image API
