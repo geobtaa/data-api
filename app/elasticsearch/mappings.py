@@ -4,26 +4,19 @@ INDEX_MAPPING = {
             "id": {"type": "keyword"},
             "dct_title_s": {
                 "type": "text",
-                "fields": {
-                    "keyword": {
-                        "type": "keyword",
-                        "normalizer": "lowercase"
-                    }
-                }
+                "fields": {"keyword": {"type": "keyword", "normalizer": "lowercase"}},
             },
             "dct_spatial_sm": {"type": "keyword"},
             "gbl_resourceclass_sm": {"type": "keyword"},
             "gbl_resourcetype_sm": {"type": "keyword"},
-            "gbl_indexyear_im": {
-                "type": "integer"
-            },
+            "gbl_indexyear_im": {"type": "integer"},
             "dct_language_sm": {"type": "keyword"},
             "dct_creator_sm": {"type": "keyword"},
             "schema_provider_s": {"type": "keyword"},
             "dct_accessrights_sm": {"type": "keyword"},
             "gbl_georeferenced_b": {"type": "boolean"},
             "dct_alternative_sm": {"type": "text"},
-            "dct_description_sm": {"type": "text"},                
+            "dct_description_sm": {"type": "text"},
             "gbl_displaynote_sm": {"type": "text"},
             "dct_publisher_sm": {"type": "text"},
             "dct_subject_sm": {"type": "text"},
@@ -42,8 +35,8 @@ INDEX_MAPPING = {
                 "analyzer": "simple",
                 "preserve_separators": True,
                 "preserve_position_increments": True,
-                "max_input_length": 50
-            }
+                "max_input_length": 50,
+            },
         }
     },
     "settings": {
@@ -52,13 +45,9 @@ INDEX_MAPPING = {
             "number_of_replicas": 0,
             "analysis": {
                 "normalizer": {
-                    "lowercase": {
-                        "type": "custom",
-                        "char_filter": [],
-                        "filter": ["lowercase"]
-                    }
+                    "lowercase": {"type": "custom", "char_filter": [], "filter": ["lowercase"]}
                 }
-            }
+            },
         }
-    }
-} 
+    },
+}

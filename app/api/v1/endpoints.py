@@ -14,6 +14,7 @@ from ...services.image_service import ImageService
 
 router = APIRouter()
 
+
 def add_thumbnail_url(document: Dict) -> Dict:
     """Add the ui_thumbnail_url to the document attributes."""
     image_service = ImageService(document)
@@ -21,11 +22,10 @@ def add_thumbnail_url(document: Dict) -> Dict:
     document["ui_thumbnail_url"] = thumbnail_url
     return document
 
+
 @router.get("/documents/{document_id}")
 async def read_item(document_id: str):
-    query = geoblacklight_development.select().where(
-        geoblacklight_development.c.id == document_id
-    )
+    query = geoblacklight_development.select().where(geoblacklight_development.c.id == document_id)
     document = await database.fetch_one(query)
 
     if not document:
@@ -33,9 +33,9 @@ async def read_item(document_id: str):
 
     # Convert Record to dict for easier handling
     doc_dict = dict(document)
-    
+
     viewer_attributes = create_viewer_attributes(doc_dict)
-    
+
     # Add thumbnail URL
     doc_dict = add_thumbnail_url(doc_dict)
 
@@ -49,12 +49,13 @@ async def read_item(document_id: str):
                     for key, value in doc_dict.items()
                     if key != "id"
                 },
-                **viewer_attributes
+                **viewer_attributes,
             },
         }
     }
 
     return json_api_response
+
 
 @router.get("/documents/")
 async def list_documents(skip: int = 0, limit: int = 10):
@@ -69,11 +70,13 @@ async def list_documents(skip: int = 0, limit: int = 10):
 
     return {"data": processed_documents}
 
+
 @router.post("/index")
 async def index_to_elasticsearch():
     """Index all documents from PostgreSQL to Elasticsearch."""
     result = await index_documents()
     return result
+
 
 @router.get("/search")
 async def search(
@@ -81,7 +84,7 @@ async def search(
     q: Optional[str] = Query(None, description="Search query string"),
     page: int = Query(1, ge=1, description="Page number for pagination"),
     limit: int = Query(10, ge=1, le=100, description="Number of records to return"),
-    sort: SortOption = Query(SortOption.RELEVANCE, description="Sort option")
+    sort: SortOption = Query(SortOption.RELEVANCE, description="Sort option"),
 ):
     try:
         skip = (page - 1) * limit
@@ -90,11 +93,7 @@ async def search(
         filter_query = extract_filter_queries(query_string)
 
         results = await search_documents(
-            query=q,
-            fq=filter_query,
-            skip=skip,
-            limit=limit,
-            sort=SORT_MAPPINGS[sort]
+            query=q, fq=filter_query, skip=skip, limit=limit, sort=SORT_MAPPINGS[sort]
         )
 
         # Process each document to add the thumbnail URL
@@ -105,27 +104,28 @@ async def search(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 def extract_filter_queries(params: Dict) -> Dict:
     """Extract filter queries from request parameters."""
     filter_query = {}
     # Parse the raw query string to handle multiple values
     raw_params = parse_qs(str(params))
-    
+
     agg_to_field = {
-        'id_agg': 'id',
-        'spatial_agg': 'dct_spatial_sm',
-        'resource_type_agg': 'gbl_resourcetype_sm',
-        'resource_class_agg': 'gbl_resourceclass_sm',
-        'index_year_agg': 'gbl_indexyear_im',
-        'language_agg': 'dct_language_sm',
-        'creator_agg': 'dct_creator_sm',
-        'provider_agg': 'schema_provider_s',
-        'access_rights_agg': 'dct_accessrights_sm',
-        'georeferenced_agg': 'gbl_georeferenced_b'
+        "id_agg": "id",
+        "spatial_agg": "dct_spatial_sm",
+        "resource_type_agg": "gbl_resourcetype_sm",
+        "resource_class_agg": "gbl_resourceclass_sm",
+        "index_year_agg": "gbl_indexyear_im",
+        "language_agg": "dct_language_sm",
+        "creator_agg": "dct_creator_sm",
+        "provider_agg": "schema_provider_s",
+        "access_rights_agg": "dct_accessrights_sm",
+        "georeferenced_agg": "gbl_georeferenced_b",
     }
 
     for key, values in raw_params.items():
-        if key.startswith('fq[') and key.endswith('][]'):
+        if key.startswith("fq[") and key.endswith("][]"):
             field = key[3:-3]  # Remove 'fq[' and '[]'
             if field in agg_to_field:
                 es_field = agg_to_field[field]
@@ -134,11 +134,12 @@ def extract_filter_queries(params: Dict) -> Dict:
 
     return filter_query
 
+
 @router.get("/suggest")
 async def suggest(
     q: str = Query(..., description="Query string for suggestions"),
     resource_class: Optional[str] = Query(None, description="Filter suggestions by resource class"),
-    size: int = Query(5, ge=1, le=20, description="Number of suggestions to return")
+    size: int = Query(5, ge=1, le=20, description="Number of suggestions to return"),
 ):
     """Get autocomplete suggestions."""
     try:
@@ -150,7 +151,7 @@ async def suggest(
                 "dct_publisher_sm",
                 "schema_provider_s",
                 "dct_subject_sm",
-                "dct_spatial_sm"
+                "dct_spatial_sm",
             ],
             "suggest": {
                 "my-suggestion": {  # Changed name to be more explicit
@@ -159,29 +160,24 @@ async def suggest(
                         "field": "suggest",
                         "size": size,
                         "skip_duplicates": True,
-                        "fuzzy": {
-                            "fuzziness": "AUTO"
-                        }
-                    }
+                        "fuzzy": {"fuzziness": "AUTO"},
+                    },
                 }
-            }
+            },
         }
 
         index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
-        
+
         # Print the query for debugging
         # print("Suggest Query:", json.dumps(suggest_query, indent=2))
-        
-        response = await es.search(
-            index=index_name,
-            body=suggest_query
-        )
-        
+
+        response = await es.search(index=index_name, body=suggest_query)
+
         # Convert response to dict for serialization
         response_dict = response.body
-        
+
         # Print the full response for debugging
-        #print("ES Response:", json.dumps(response_dict, indent=2))
+        # print("ES Response:", json.dumps(response_dict, indent=2))
 
         suggestions = []
         seen_ids = set()  # Track seen suggestion IDs
@@ -193,15 +189,17 @@ async def suggest(
                         suggestion_id = option["_id"]
                         if suggestion_id not in seen_ids:  # Check for duplicates
                             seen_ids.add(suggestion_id)
-                            suggestions.append({
-                                "type": "suggestion",
-                                "id": suggestion_id,
-                                "attributes": {
-                                    "text": option.get("text", ""),
-                                    "title": option.get("_source", {}).get("dct_title_s", ""),
-                                    "score": option.get("_score", 0)
+                            suggestions.append(
+                                {
+                                    "type": "suggestion",
+                                    "id": suggestion_id,
+                                    "attributes": {
+                                        "text": option.get("text", ""),
+                                        "title": option.get("_source", {}).get("dct_title_s", ""),
+                                        "score": option.get("_score", 0),
+                                    },
                                 }
-                            })
+                            )
 
         return {
             "data": suggestions,
@@ -209,13 +207,12 @@ async def suggest(
                 "query": q,
                 "resource_class": resource_class,
                 "es_query": suggest_query,
-                "es_response": response_dict
-            }
+                "es_response": response_dict,
+            },
         }
 
     except Exception as e:
         # print(f"Suggestion error: {e}")
         raise HTTPException(
-            status_code=500, 
-            detail=f"Suggestion error: {str(e)}\nQuery: {suggest_query}"
+            status_code=500, detail=f"Suggestion error: {str(e)}\nQuery: {suggest_query}"
         )

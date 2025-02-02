@@ -5,23 +5,26 @@ import json
 import re
 import os
 
+
 async def index_documents():
     """Index all documents from PostgreSQL into Elasticsearch."""
     index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
-    
+
     if await es.indices.exists(index=index_name):
         await es.indices.delete(index=index_name)
-    
+
     from .client import init_elasticsearch
+
     await init_elasticsearch()
-    
+
     documents = await database.fetch_all(geoblacklight_development.select())
     bulk_data = prepare_bulk_data(documents, index_name)
-    
+
     if bulk_data:
         return await perform_bulk_indexing(bulk_data, index_name)
-    
+
     return {"message": "No documents to index"}
+
 
 def prepare_bulk_data(documents, index_name):
     """Prepare documents for bulk indexing."""
@@ -31,6 +34,7 @@ def prepare_bulk_data(documents, index_name):
         bulk_data.append({"index": {"_index": index_name, "_id": doc_dict["id"]}})
         bulk_data.append(doc_dict)
     return bulk_data
+
 
 def process_document(doc_dict):
     """Process a single document for indexing."""
@@ -52,56 +56,56 @@ def process_document(doc_dict):
                 doc_dict[key] = process_geometry(value)
             except Exception as e:
                 print(f"Error processing dcat_bbox: {e}")
-    
+
     # Clean and prepare suggestion inputs
     suggestion_inputs = []
-    
+
     # Add title if it exists
     if title := doc_dict.get("dct_title_s"):
         suggestion_inputs.append(title)
-    
+
     # Add creators
     if creators := doc_dict.get("dct_creator_sm"):
         if isinstance(creators, list):
             suggestion_inputs.extend(creators)
         else:
             suggestion_inputs.append(creators)
-    
+
     # Add publishers
     if publishers := doc_dict.get("dct_publisher_sm"):
         if isinstance(publishers, list):
             suggestion_inputs.extend(publishers)
         else:
             suggestion_inputs.append(publishers)
-    
+
     # Add provider
     if provider := doc_dict.get("schema_provider_s"):
         suggestion_inputs.append(provider)
-    
+
     # Add subjects
     if subjects := doc_dict.get("dct_subject_sm"):
         if isinstance(subjects, list):
             suggestion_inputs.extend(subjects)
         else:
             suggestion_inputs.append(subjects)
-    
+
     # Add spatial
     if spatial := doc_dict.get("dct_spatial_sm"):
         if isinstance(spatial, list):
             suggestion_inputs.extend(spatial)
         else:
             suggestion_inputs.append(spatial)
-    
+
     # Add keywords
     if keywords := doc_dict.get("dcat_keyword_sm"):
         if isinstance(keywords, list):
             suggestion_inputs.extend(keywords)
         else:
             suggestion_inputs.append(keywords)
-    
+
     # Filter out None values and empty strings
     suggestion_inputs = [s for s in suggestion_inputs if s and str(s).strip()]
-    
+
     # Get resource classes, ensuring it's a list and has at least one value
     resource_classes = doc_dict.get("gbl_resourceclass_sm", [])
     if isinstance(resource_classes, str):
@@ -110,39 +114,38 @@ def process_document(doc_dict):
         resource_classes = ["none"]
 
     # Add suggestion field with cleaned data - removed contexts
-    doc_dict["suggest"] = {
-        "input": suggestion_inputs
-    }
+    doc_dict["suggest"] = {"input": suggestion_inputs}
 
     # print(f"Indexing suggestions for {doc_dict['id']}: {doc_dict['suggest']}")  # Debug output
     return doc_dict
 
+
 def process_geometry(geometry):
     """Process geometry fields in a document."""
     try:
-        envelope_match = re.match(r'ENVELOPE\(([-\d.]+),([-\d.]+),([-\d.]+),([-\d.]+)\)', geometry)
+        envelope_match = re.match(r"ENVELOPE\(([-\d.]+),([-\d.]+),([-\d.]+),([-\d.]+)\)", geometry)
         if envelope_match:
             minx, maxx, maxy, miny = map(float, envelope_match.groups())
             geojson_geometry = {
                 "type": "Polygon",
-                "coordinates": [[
-                    [minx, maxy], [minx, miny], [maxx, miny],
-                    [maxx, maxy], [minx, maxy]
-                ]]
+                "coordinates": [
+                    [[minx, maxy], [minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]]
+                ],
             }
             return geojson_geometry
     except Exception as e:
         print(f"Error processing locn_geometry: {e}")
 
+
 async def perform_bulk_indexing(bulk_data, index_name):
     """Perform bulk indexing operation."""
     response = await es.bulk(operations=bulk_data, refresh=True)
-    
-    if response.get('errors'):
-        for item in response['items']:
-            if 'error' in item['index']:
+
+    if response.get("errors"):
+        for item in response["items"]:
+            if "error" in item["index"]:
                 print(f"Error indexing document {item['index']['_id']}: {item['index']['error']}")
-    
+
     stats = await es.indices.stats(index=index_name)
     doc_count = stats["indices"][index_name]["total"]["docs"]["count"]
     return {"message": f"Successfully indexed {doc_count} documents"}

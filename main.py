@@ -17,11 +17,7 @@ async def lifespan(app: FastAPI):
     await close_elasticsearch()
 
 
-app = FastAPI(
-    title="BTAA Geoportal API",
-    version="0.1.0",
-    lifespan=lifespan
-)
+app = FastAPI(title="BTAA Geoportal API", version="0.1.0", lifespan=lifespan)
 
 # Add CORS middleware
 app.add_middleware(

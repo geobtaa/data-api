@@ -1,6 +1,23 @@
-   [tool.black]
-   exclude = '''
-   /(
-       venv
-   )/
-   '''
+[tool.black]
+line-length = 100
+target-version = ['py39']
+include = '\.pyi?$'
+extend-exclude = '''
+# A regex preceded with ^/ will apply only to files and directories
+# in the root of the project.
+^/foo.py  # exclude a file named foo.py in the root of the project
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 100
+include_trailing_comma = true
+
+[tool.poetry.scripts]
+lint = """
+    black . &&
+    isort . &&
+    flake8 . &&
+    mypy .
+"""
