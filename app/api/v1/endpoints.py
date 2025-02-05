@@ -11,8 +11,11 @@ from .shared import SortOption, SORT_MAPPINGS
 import os
 from ...elasticsearch.client import es
 from ...services.image_service import ImageService
+import logging
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 def add_thumbnail_url(document: Dict) -> Dict:
@@ -86,14 +89,22 @@ async def search(
     limit: int = Query(10, ge=1, le=100, description="Number of records to return"),
     sort: SortOption = Query(SortOption.RELEVANCE, description="Sort option"),
 ):
+    """Search documents with optional filters and sorting."""
     try:
         skip = (page - 1) * limit
         query_string = str(request.query_params)
-        params = parse_qs(query_string)
+        logger.info(f"Search request - Query: {q}, Page: {page}, Limit: {limit}, Sort: {sort}")
+        logger.debug(f"Raw query string: {query_string}")
+        
         filter_query = extract_filter_queries(query_string)
+        logger.debug(f"Extracted filter query: {filter_query}")
 
         results = await search_documents(
-            query=q, fq=filter_query, skip=skip, limit=limit, sort=SORT_MAPPINGS[sort]
+            query=q, 
+            fq=filter_query, 
+            skip=skip, 
+            limit=limit, 
+            sort=SORT_MAPPINGS[sort]
         )
 
         # Process each document to add the thumbnail URL
@@ -102,7 +113,19 @@ async def search(
 
         return results
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Search endpoint error", exc_info=True)
+        raise HTTPException(
+            status_code=500, 
+            detail={
+                "message": "Search operation failed",
+                "error": str(e),
+                "query": q,
+                "filters": filter_query if 'filter_query' in locals() else None,
+                "sort": sort.value if sort else None,
+                "elasticsearch_url": os.getenv("ELASTICSEARCH_URL"),
+                "elasticsearch_index": os.getenv("ELASTICSEARCH_INDEX")
+            }
+        )
 
 
 def extract_filter_queries(params: Dict) -> Dict:

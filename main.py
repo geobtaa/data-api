@@ -1,9 +1,26 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+import logging
+import sys
 from app.api.v1.endpoints import router as api_router
 from app.elasticsearch import init_elasticsearch, close_elasticsearch
 from db.database import database
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
+import os
+
+# Create logs directory if it doesn't exist
+os.makedirs("logs", exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('logs/app.log')  # Write to logs directory
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -29,3 +46,15 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global exception handler caught: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": str(exc),
+            "path": str(request.url),
+            "method": request.method,
+        }
+    )

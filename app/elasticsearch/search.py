@@ -8,6 +8,10 @@ import time
 from sqlalchemy.sql import text
 from urllib.parse import urlencode
 from app.services.image_service import ImageService
+import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_search_criteria(query: str, fq: dict, skip: int, limit: int, sort: list = None):
@@ -25,27 +29,26 @@ async def search_documents(
 ):
     """Search documents in Elasticsearch with optional filters and sorting."""
     index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
+    
+    try:
+        # Get the current search criteria
+        search_criteria = get_search_criteria(query, fq, skip, limit, sort)
+        logger.debug(f"Search criteria: {search_criteria}")
 
-    # Get the current search criteria
-    search_criteria = get_search_criteria(query, fq, skip, limit, sort)
-    # print("Current Search Criteria:", search_criteria)
+        # Construct the filter query
+        filter_clauses = []
+        if fq:
+            for field, values in fq.items():
+                logger.debug(f"Processing filter - Field: {field}, Values: {values}")
+                if isinstance(values, list):
+                    filter_clauses.append({"terms": {field: values}})
+                else:
+                    filter_clauses.append({"term": {field: values}})
 
-    # Construct the filter query
-    filter_clauses = []
-    if fq:
-        for field, values in fq.items():
-            if isinstance(values, list):
-                filter_clauses.append({"terms": {field: values}})
-            else:
-                filter_clauses.append({"term": {field: values}})
-
-    search_query = {
-        "query": {
-            "bool": {
-                "must": (
-                    [{"match_all": {}}]
-                    if not query
-                    else [
+        search_query = {
+            "query": {
+                "bool": {
+                    "must": [{"match_all": {}}] if not query else [
                         {
                             "multi_match": {
                                 "query": query,
@@ -57,40 +60,58 @@ async def search_documents(
                                     "dct_subject_sm",
                                     "dcat_theme_sm",
                                     "dcat_keyword_sm",
-                                    "dct_spatial_sm",
+                                    "dct_spatial_sm"
                                 ],
                             }
                         }
-                    ]
-                ),
-                "filter": filter_clauses,
+                    ],
+                    "filter": filter_clauses
+                }
+            },
+            "from": skip,
+            "size": limit,
+            "sort": sort or [{"_score": "desc"}],
+            "aggs": {
+                "id_agg": {"terms": {"field": "id"}},
+                "spatial_agg": {"terms": {"field": "dct_spatial_sm"}},
+                "resource_class_agg": {"terms": {"field": "gbl_resourceclass_sm"}},
+                "resource_type_agg": {"terms": {"field": "gbl_resourcetype_sm"}},
+                "index_year_agg": {"terms": {"field": "gbl_indexyear_im"}},
+                "language_agg": {"terms": {"field": "dct_language_sm"}},
+                "creator_agg": {"terms": {"field": "dct_creator_sm"}},
+                "provider_agg": {"terms": {"field": "schema_provider_s"}},
+                "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
+                "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}}
             }
-        },
-        "from": skip,
-        "size": limit,
-        "sort": sort or [{"_score": "desc"}],  # Use provided sort or default to relevance
-        "aggs": {
-            "id_agg": {"terms": {"field": "id"}},
-            "spatial_agg": {"terms": {"field": "dct_spatial_sm"}},
-            "resource_class_agg": {"terms": {"field": "gbl_resourceclass_sm"}},
-            "resource_type_agg": {"terms": {"field": "gbl_resourcetype_sm"}},
-            "index_year_agg": {"terms": {"field": "gbl_indexyear_im"}},
-            "language_agg": {"terms": {"field": "dct_language_sm"}},
-            "creator_agg": {"terms": {"field": "dct_creator_sm"}},
-            "provider_agg": {"terms": {"field": "schema_provider_s"}},
-            "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
-            "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
-        },
-    }
+        }
 
-    try:
-        response = await es.search(index=index_name, body=search_query, track_total_hits=True)
-
+        logger.debug(f"ES Query: {json.dumps(search_query, indent=2)}")
+        
+        try:
+            response = await es.search(
+                index=index_name,
+                body=search_query,
+                track_total_hits=True
+            )
+        except Exception as es_error:
+            logger.error(f"Elasticsearch error: {str(es_error)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": "Elasticsearch query failed",
+                    "error": str(es_error),
+                    "query": search_query,
+                    "index": index_name
+                }
+            )
+        
+        logger.info(f"ES Response status: {response.meta.status}")
+        
         return await process_search_response(response, limit, skip, search_criteria)
 
     except Exception as e:
-        # print(f"Search error: {e}")
-        raise HTTPException(status_code=500, detail="Search operation failed")
+        logger.error(f"Search documents error: {str(e)}", exc_info=True)
+        raise
 
 
 def get_sort_options(search_criteria):
@@ -154,93 +175,112 @@ def get_sort_options(search_criteria):
 
 async def process_search_response(response, limit, skip, search_criteria):
     """Process Elasticsearch response and fetch documents from PostgreSQL."""
-    total_hits = response["hits"]["total"]["value"]
-    document_ids = [hit["_source"]["id"] for hit in response["hits"]["hits"]]
+    try:
+        total_hits = response.body["hits"]["total"]["value"]
+        logger.debug(f"Total hits: {total_hits}")
+        
+        document_ids = [hit["_source"]["id"] for hit in response.body["hits"]["hits"]]
+        logger.debug(f"Found document IDs: {document_ids}")
 
-    if not document_ids:
-        # Return early if there are no document IDs
+        if not document_ids:
+            logger.debug("No documents found")
+            return {
+                "status": "success",
+                "query_time": {"elasticsearch": response.body["took"].__str__() + "ms", "postgresql": "0ms"},
+                "meta": {
+                    "pages": {
+                        "current_page": (skip // limit) + 1,
+                        "next_page": None,
+                        "prev_page": ((skip // limit)) if skip > 0 else None,
+                        "total_pages": 0,
+                        "limit_value": limit,
+                        "offset_value": skip,
+                        "total_count": total_hits,
+                        "first_page?": True,
+                        "last_page?": True,
+                    }
+                },
+                "data": [],
+                "included": [],
+            }
+
+        start_time = time.time()
+        # Create a CASE statement to preserve the order of document_ids
+        order_case = (
+            "CASE "
+            + " ".join(
+                f"WHEN id = '{doc_id}' THEN {index}" for index, doc_id in enumerate(document_ids)
+            )
+            + " END"
+        )
+
+        query = (
+            geoblacklight_development.select()
+            .where(geoblacklight_development.c.id.in_(document_ids))
+            .order_by(text(order_case))
+        )
+
+        documents = await database.fetch_all(query)
+        processed_documents = []
+
+        for doc in documents:
+            processed_documents.append(
+                {
+                    "type": "document",
+                    "id": doc["id"],
+                    "score": next(
+                        hit["_score"]
+                        for hit in response.body["hits"]["hits"]
+                        if hit["_source"]["id"] == doc["id"]
+                    ),
+                    "attributes": {**doc, **create_viewer_attributes(doc)},
+                }
+            )
+
+        pg_query_time = (time.time() - start_time) * 1000
+
+        included = [
+            *process_aggregations(response.body.get("aggregations", {}), search_criteria),
+            *get_sort_options(search_criteria),
+        ]
+
         return {
             "status": "success",
-            "query_time": {"elasticsearch": response["took"].__str__() + "ms", "postgresql": "0ms"},
+            "query_time": {
+                "elasticsearch": response.body["took"].__str__() + "ms",
+                "postgresql": f"{round(pg_query_time)}ms",
+            },
             "meta": {
                 "pages": {
                     "current_page": (skip // limit) + 1,
-                    "next_page": None,
+                    "next_page": ((skip // limit) + 2) if (skip + limit) < total_hits else None,
                     "prev_page": ((skip // limit)) if skip > 0 else None,
-                    "total_pages": 0,
+                    "total_pages": (total_hits // limit) + (1 if total_hits % limit > 0 else 0),
                     "limit_value": limit,
                     "offset_value": skip,
                     "total_count": total_hits,
-                    "first_page?": True,
-                    "last_page?": True,
+                    "first_page?": (skip == 0),
+                    "last_page?": (skip + limit) >= total_hits,
                 }
             },
-            "data": [],
-            "included": [],
+            "data": processed_documents,
+            "included": included,
         }
 
-    start_time = time.time()
-    # Create a CASE statement to preserve the order of document_ids
-    order_case = (
-        "CASE "
-        + " ".join(
-            f"WHEN id = '{doc_id}' THEN {index}" for index, doc_id in enumerate(document_ids)
-        )
-        + " END"
-    )
-
-    query = (
-        geoblacklight_development.select()
-        .where(geoblacklight_development.c.id.in_(document_ids))
-        .order_by(text(order_case))
-    )
-
-    documents = await database.fetch_all(query)
-    processed_documents = []
-
-    for doc in documents:
-        processed_documents.append(
-            {
-                "type": "document",
-                "id": doc["id"],
-                "score": next(
-                    hit["_score"]
-                    for hit in response["hits"]["hits"]
-                    if hit["_source"]["id"] == doc["id"]
-                ),
-                "attributes": {**doc, **create_viewer_attributes(doc)},
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(f"Process response error: {str(e)}", exc_info=True)
+        logger.error(f"Full traceback:\n{error_trace}")
+        logger.error(f"Response body: {response.body}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": str(e),
+                "traceback": error_trace,
+                "response": response.body
             }
         )
-
-    pg_query_time = (time.time() - start_time) * 1000
-
-    included = [
-        *process_aggregations(response.get("aggregations", {}), search_criteria),
-        *get_sort_options(search_criteria),
-    ]
-
-    return {
-        "status": "success",
-        "query_time": {
-            "elasticsearch": response["took"].__str__() + "ms",
-            "postgresql": f"{round(pg_query_time)}ms",
-        },
-        "meta": {
-            "pages": {
-                "current_page": (skip // limit) + 1,
-                "next_page": ((skip // limit) + 2) if (skip + limit) < total_hits else None,
-                "prev_page": ((skip // limit)) if skip > 0 else None,
-                "total_pages": (total_hits // limit) + (1 if total_hits % limit > 0 else 0),
-                "limit_value": limit,
-                "offset_value": skip,
-                "total_count": total_hits,
-                "first_page?": (skip == 0),
-                "last_page?": (skip + limit) >= total_hits,
-            }
-        },
-        "data": processed_documents,
-        "included": included,
-    }
 
 
 def process_aggregations(aggregations, search_criteria):
