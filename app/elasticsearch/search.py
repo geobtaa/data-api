@@ -312,7 +312,7 @@ def process_aggregations(aggregations, search_criteria):
 
 def generate_facet_link(agg_name, facet_value, search_criteria):
     """Generate a link for a facet with current search parameters."""
-    base_url = os.getenv("APPLICATION_URL") + "/api/v1/search"
+    base_url = os.getenv("APPLICATION_URL", "http://localhost:8000") + "/api/v1/search"
     query_params = {
         "q": search_criteria["query"] or "",
         "search_field": "all_fields",

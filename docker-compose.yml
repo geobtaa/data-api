@@ -3,13 +3,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ewlarson/ogm-api:0.1.0
+    image: ewlarson/ogm-api:0.1.1
     container_name: ogm-api
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/geoblacklight_development
       - ELASTICSEARCH_URL=http://elasticsearch:9200
       - ELASTICSEARCH_INDEX=geoblacklight
       - LOG_PATH=/app/logs
+      - APPLICATION_URL=http://localhost:8000
     ports:
       - "8000:8000"
     depends_on:
