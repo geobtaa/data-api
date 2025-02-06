@@ -10,7 +10,8 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Configure the database:
+The default settings should work for local development, but if you need to tweak the environment variables, you can do so by copying the `.env.example` file to `.env` and making your changes.
+
 ```bash
 cp .env.example .env
 ```
@@ -36,6 +37,17 @@ Run the API server:
 uvicorn main:app --reload
 ```
 
+## Docker Hub
+
+The application is also available as a Docker image on Docker Hub. You can pull and run the image using the following commands:
+
+```bash
+docker pull ewlarson/ogm-api:latest
+docker run -d -p 8000:8000 ewlarson/ogm-api:latest
+```
+
+This will start the API server on port 8000.
+
 ## Endpoints
 
 ### GET /docs
@@ -46,6 +58,7 @@ Returns the API documentation.
 
 ## TODO
 
+- [X] Docker Image - Published on Docker Hub
 - [X] Search - basic search across all text fields
 - [X] Search - more complex search with filters
 - [X] Search - pagination
