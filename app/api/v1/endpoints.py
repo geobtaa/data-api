@@ -11,6 +11,7 @@ from .shared import SortOption, SORT_MAPPINGS
 import os
 from ...elasticsearch.client import es
 from ...services.image_service import ImageService
+from ...services.citation_service import CitationService
 import logging
 
 router = APIRouter()
@@ -26,6 +27,17 @@ def add_thumbnail_url(document: Dict) -> Dict:
     return document
 
 
+def add_citations(document: Dict) -> Dict:
+    """Add citations to a document."""
+    try:
+        citation_service = CitationService(document)
+        document["ui_citation"] = citation_service.get_citation()
+    except Exception as e:
+        logger.error(f"Failed to generate citation: {str(e)}")
+        document["ui_citation"] = "Citation unavailable"
+    return document
+
+
 @router.get("/documents/{document_id}")
 async def read_item(document_id: str):
     query = geoblacklight_development.select().where(geoblacklight_development.c.id == document_id)
@@ -37,10 +49,14 @@ async def read_item(document_id: str):
     # Convert Record to dict for easier handling
     doc_dict = dict(document)
 
+    # Add viewer attributes
     viewer_attributes = create_viewer_attributes(doc_dict)
 
     # Add thumbnail URL
     doc_dict = add_thumbnail_url(doc_dict)
+
+    # Add citations
+    doc_dict = add_citations(doc_dict)
 
     json_api_response = {
         "data": {
@@ -53,6 +69,7 @@ async def read_item(document_id: str):
                     if key != "id"
                 },
                 **viewer_attributes,
+                "ui_citation": doc_dict.get("ui_citation"),
             },
         }
     }
@@ -69,6 +86,7 @@ async def list_documents(skip: int = 0, limit: int = 10):
     for document in documents:
         doc_dict = dict(document)
         doc_dict = add_thumbnail_url(doc_dict)
+        doc_dict = add_citations(doc_dict)
         processed_documents.append(doc_dict)
 
     return {"data": processed_documents}
@@ -107,9 +125,11 @@ async def search(
             sort=SORT_MAPPINGS[sort]
         )
 
-        # Process each document to add the thumbnail URL
+        # Process each document to add the thumbnail URL and citation
         for document in results["data"]:
             document["attributes"] = add_thumbnail_url(document["attributes"])
+            # Add citation at the top level
+            document["ui_citation"] = CitationService(document["attributes"]).get_citation()
 
         return results
     except Exception as e:
@@ -239,3 +259,19 @@ async def suggest(
         raise HTTPException(
             status_code=500, detail=f"Suggestion error: {str(e)}\nQuery: {suggest_query}"
         )
+
+
+async def perform_bulk_indexing(bulk_data, index_name, bulk_size=100):
+    """Perform bulk indexing in smaller chunks."""
+    # Split the bulk_data into smaller chunks
+    for i in range(0, len(bulk_data), bulk_size):
+        chunk = bulk_data[i:i + bulk_size]
+        try:
+            # Perform the bulk operation for the current chunk
+            response = await es.bulk(operations=chunk, index=index_name, refresh=True)
+            # Check for errors in the response
+            if response.get('errors'):
+                logger.error(f"Errors occurred during bulk indexing: {response['items']}")
+        except Exception as e:
+            logger.error(f"Exception during bulk indexing: {str(e)}")
+            # Optionally, implement retry logic here

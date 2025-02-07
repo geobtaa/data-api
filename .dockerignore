@@ -22,4 +22,6 @@ coverage.xml
 .hypothesis
 .idea
 .vscode
-logs/ 
+logs/
+elasticsearch-data/
+paradedb-data/ 
