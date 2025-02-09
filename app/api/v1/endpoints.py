@@ -13,6 +13,7 @@ from ...elasticsearch.client import es
 from ...services.image_service import ImageService
 from ...services.citation_service import CitationService
 import logging
+import time
 
 router = APIRouter()
 
@@ -21,20 +22,28 @@ logger = logging.getLogger(__name__)
 
 def add_thumbnail_url(document: Dict) -> Dict:
     """Add the ui_thumbnail_url to the document attributes."""
+    # Ensure 'attributes' key exists
+    if "attributes" not in document:
+        document["attributes"] = {}
+
     image_service = ImageService(document)
     thumbnail_url = image_service.get_thumbnail_url()
-    document["ui_thumbnail_url"] = thumbnail_url
+    document["attributes"]["ui_thumbnail_url"] = thumbnail_url
     return document
 
 
 def add_citations(document: Dict) -> Dict:
     """Add citations to a document."""
+    # Ensure 'attributes' key exists
+    if "attributes" not in document:
+        document["attributes"] = {}
+
     try:
         citation_service = CitationService(document)
-        document["ui_citation"] = citation_service.get_citation()
+        document["attributes"]["ui_citation"] = citation_service.get_citation()
     except Exception as e:
         logger.error(f"Failed to generate citation: {str(e)}")
-        document["ui_citation"] = "Citation unavailable"
+        document["attributes"]["ui_citation"] = "Citation unavailable"
     return document
 
 
@@ -70,6 +79,10 @@ async def read_item(document_id: str):
                 },
                 **viewer_attributes,
                 "ui_citation": doc_dict.get("ui_citation"),
+                "ui_thumbnail_url": doc_dict.get("ui_thumbnail_url"),
+                "ui_viewer_endpoint": viewer_attributes.get("ui_viewer_endpoint"),
+                "ui_viewer_geometry": viewer_attributes.get("ui_viewer_geometry"),
+                "ui_viewer_protocol": viewer_attributes.get("ui_viewer_protocol"),
             },
         }
     }
@@ -87,7 +100,20 @@ async def list_documents(skip: int = 0, limit: int = 10):
         doc_dict = dict(document)
         doc_dict = add_thumbnail_url(doc_dict)
         doc_dict = add_citations(doc_dict)
-        processed_documents.append(doc_dict)
+        viewer_attributes = create_viewer_attributes(doc_dict)
+        processed_documents.append({
+            "type": "document",
+            "id": str(doc_dict["id"]),
+            "attributes": {
+                **doc_dict,
+                **viewer_attributes,
+                "ui_citation": doc_dict.get("ui_citation"),
+                "ui_thumbnail_url": doc_dict.get("ui_thumbnail_url"),
+                "ui_viewer_endpoint": viewer_attributes.get("ui_viewer_endpoint"),
+                "ui_viewer_geometry": viewer_attributes.get("ui_viewer_geometry"),
+                "ui_viewer_protocol": viewer_attributes.get("ui_viewer_protocol"),
+            }
+        })
 
     return {"data": processed_documents}
 
@@ -102,48 +128,90 @@ async def index_to_elasticsearch():
 @router.get("/search")
 async def search(
     request: Request,
-    q: Optional[str] = Query(None, description="Search query string"),
-    page: int = Query(1, ge=1, description="Page number for pagination"),
-    limit: int = Query(10, ge=1, le=100, description="Number of records to return"),
-    sort: SortOption = Query(SortOption.RELEVANCE, description="Sort option"),
+    q: Optional[str] = Query(None, description="Search query"),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Results per page"),
+    sort: SortOption = Query(SortOption.RELEVANCE, description="Sort order")
 ):
-    """Search documents with optional filters and sorting."""
+    """Search endpoint."""
     try:
-        skip = (page - 1) * limit
-        query_string = str(request.query_params)
-        logger.info(f"Search request - Query: {q}, Page: {page}, Limit: {limit}, Sort: {sort}")
-        logger.debug(f"Raw query string: {query_string}")
-        
-        filter_query = extract_filter_queries(query_string)
-        logger.debug(f"Extracted filter query: {filter_query}")
+        timings = {}
+        start_time = time.time()
 
+        # Calculate skip from page/limit
+        skip = (page - 1) * limit
+
+        # Get filter queries from request
+        query_string = str(request.query_params)
+        filter_query = extract_filter_queries(query_string)
+
+        # Elasticsearch query
+        es_start = time.time()
         results = await search_documents(
-            query=q, 
-            fq=filter_query, 
-            skip=skip, 
-            limit=limit, 
+            query=q,
+            fq=filter_query,
+            skip=skip,
+            limit=limit,
             sort=SORT_MAPPINGS[sort]
         )
+        es_time = (time.time() - es_start) * 1000
+        timings["elasticsearch"] = f"{es_time:.0f}ms"
 
-        # Process each document to add the thumbnail URL and citation
+        # Process each document
+        process_start = time.time()
+        docs_processed = 0
+        citation_time = 0
+        thumbnail_time = 0
+        viewer_time = 0
+
         for document in results["data"]:
-            document["attributes"] = add_thumbnail_url(document["attributes"])
-            # Add citation at the top level
-            document["ui_citation"] = CitationService(document["attributes"]).get_citation()
+            doc_start = time.time()
+            
+            # Add thumbnail URL
+            thumb_start = time.time()
+            image_service = ImageService(document["attributes"])
+            document["attributes"]["ui_thumbnail_url"] = image_service.get_thumbnail_url()
+            thumbnail_time += time.time() - thumb_start
 
+            # Add citation
+            cite_start = time.time()
+            citation_service = CitationService(document["attributes"])
+            document["attributes"]["ui_citation"] = citation_service.get_citation()
+            citation_time += time.time() - cite_start
+
+            # Add viewer attributes
+            viewer_start = time.time()
+            viewer_attrs = create_viewer_attributes(document["attributes"])
+            document["attributes"].update(viewer_attrs)
+            viewer_time += time.time() - viewer_start
+
+            docs_processed += 1
+
+        process_time = time.time() - process_start
+        timings["document_processing"] = {
+            "total": f"{(process_time * 1000):.0f}ms",
+            "per_document": f"{((process_time/docs_processed) * 1000):.0f}ms",
+            "thumbnail_service": f"{(thumbnail_time * 1000):.0f}ms",
+            "citation_service": f"{(citation_time * 1000):.0f}ms",
+            "viewer_service": f"{(viewer_time * 1000):.0f}ms"
+        }
+
+        total_time = time.time() - start_time
+        timings["total_response_time"] = f"{(total_time * 1000):.0f}ms"
+
+        results["query_time"] = timings
         return results
+
     except Exception as e:
-        logger.error("Search endpoint error", exc_info=True)
+        logger.error(f"Search endpoint error", exc_info=True)
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail={
                 "message": "Search operation failed",
                 "error": str(e),
                 "query": q,
                 "filters": filter_query if 'filter_query' in locals() else None,
-                "sort": sort.value if sort else None,
-                "elasticsearch_url": os.getenv("ELASTICSEARCH_URL"),
-                "elasticsearch_index": os.getenv("ELASTICSEARCH_INDEX")
+                "sort": sort.value if sort else None
             }
         )
 

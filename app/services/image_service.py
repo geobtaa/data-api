@@ -3,6 +3,9 @@ import logging
 from typing import Dict, Optional
 import json
 import requests
+from functools import lru_cache
+import aiohttp
+import asyncio
 
 
 class ImageService:
@@ -19,6 +22,17 @@ class ImageService:
         self.logger.setLevel(logging.INFO)
 
         # print(f"Document WXS: {self.document.get('gbl_wxsidentifier_s')}")
+
+    @lru_cache(maxsize=1000)
+    def _get_cached_manifest(self, manifest_url: str) -> Optional[Dict]:
+        """Cache manifest responses to avoid repeated HTTP requests."""
+        try:
+            response = requests.get(manifest_url, timeout=2.0)  # Add timeout
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            self.logger.error(f"Error fetching manifest {manifest_url}: {e}")
+            return None
 
     def get_iiif_manifest_thumbnail(self, manifest_url: str) -> Optional[str]:
         """
@@ -92,19 +106,22 @@ class ImageService:
                 try:
                     references = json.loads(references)
                 except json.JSONDecodeError:
-                    self.logger.error(
-                        f"Failed to parse references JSON for {self.document.get('id')}"
-                    )
                     return None
 
             if not isinstance(references, dict):
                 return None
 
-            # Check for direct thumbnail URL first
+            # Direct thumbnail URL - fastest path
             if "http://schema.org/thumbnailUrl" in references:
-                return references["http://schema.org/thumbnailUrl"]
+                url = references["http://schema.org/thumbnailUrl"]
+                return url.replace("/full/full/0/", "/full/400,/0/") if "/full/full/0/" in url else url
 
-            # Check for IIIF Manifest
+            # IIIF Image API - fast path
+            if "http://iiif.io/api/image" in references:
+                viewer_endpoint = references["http://iiif.io/api/image"]
+                return f"{viewer_endpoint.replace('info.json', '')}full/400,/0/default.jpg"
+
+            # IIIF Manifest - slower path
             if (
                 "https://iiif.io/api/presentation/2/context.json" in references
                 or "http://iiif.io/api/presentation#manifest" in references
@@ -112,13 +129,18 @@ class ImageService:
                 manifest_url = references.get(
                     "https://iiif.io/api/presentation/2/context.json"
                 ) or references.get("http://iiif.io/api/presentation#manifest")
-                return self.get_iiif_manifest_thumbnail(manifest_url)
-
-            # Check for IIIF Image API
-            if "http://iiif.io/api/image" in references:
-                viewer_endpoint = references["http://iiif.io/api/image"]
-                # Request a smaller thumbnail, e.g., 200 pixels wide
-                return viewer_endpoint.replace("info.json", "") + "full/400,/0/default.jpg"
+                
+                # Use cached manifest
+                manifest_json = self._get_cached_manifest(manifest_url)
+                if manifest_json:
+                    # Extract thumbnail URL using existing logic...
+                    if "sequences" in manifest_json:
+                        canvas = manifest_json.get("sequences", [{}])[0].get("canvases", [{}])[0]
+                        image = canvas.get("images", [{}])[0].get("resource", {})
+                        
+                        if "@id" in image and "/full/full/0/" in image["@id"]:
+                            return image["@id"].replace("/full/full/0/", "/full/400,/0/")
+                        return image.get("@id")
 
             # Check for ESRI services
             elif "urn:x-esri:serviceType:ArcGIS#ImageMapLayer" in references:
@@ -137,7 +159,7 @@ class ImageService:
                 width = 200
                 height = 200
                 layers = self.document.get("gbl_wxsidentifier_s", "")
-                return (
+                url = (
                     f"{wms_endpoint}/reflect?"
                     f"FORMAT=image/png&"
                     f"TRANSPARENT=TRUE&"
@@ -145,6 +167,7 @@ class ImageService:
                     f"HEIGHT={height}&"
                     f"LAYERS={layers}"
                 )
+                return url.replace("/full/full/0/", "/full/400,/0/") if "/full/full/0/" in url else url
 
             # Check for TMS
             elif "http://www.opengis.net/def/serviceType/ogc/tms" in references:
