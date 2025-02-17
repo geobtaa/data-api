@@ -11,6 +11,7 @@ services:
       - ELASTICSEARCH_INDEX=geoblacklight
       - LOG_PATH=/app/logs
       - APPLICATION_URL=http://localhost:8000
+      - CORS_ORIGINS=http://localhost:5173,https://ewlarson.github.io,https://data-api.ngrok.io
     ports:
       - "8000:8000"
     depends_on:

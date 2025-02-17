@@ -5,7 +5,7 @@ from sqlalchemy import select, func
 import json
 from ...elasticsearch import index_documents, search_documents
 from ...services.viewer_service import create_viewer_attributes
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any, Union
 from urllib.parse import parse_qs
 from .shared import SortOption, SORT_MAPPINGS
 import os
@@ -14,6 +14,9 @@ from ...services.image_service import ImageService
 from ...services.citation_service import CitationService
 import logging
 import time
+from fastapi.responses import JSONResponse
+from .jsonp import JSONPResponse
+from datetime import datetime
 
 router = APIRouter()
 
@@ -47,8 +50,31 @@ def add_citations(document: Dict) -> Dict:
     return document
 
 
+def sanitize_for_json(obj: Any) -> Any:
+    """Recursively convert datetime objects to ISO format strings."""
+    if isinstance(obj, dict):
+        return {key: sanitize_for_json(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_for_json(item) for item in obj]
+    elif isinstance(obj, datetime):
+        return obj.isoformat()
+    return obj
+
+
+def create_response(content: Dict, callback: Optional[str] = None) -> JSONResponse:
+    """Create either a JSON or JSONP response based on callback parameter."""
+    # Sanitize content before serialization
+    sanitized_content = sanitize_for_json(content)
+    if callback:
+        return JSONPResponse(content=sanitized_content, callback=callback)
+    return JSONResponse(content=sanitized_content)
+
+
 @router.get("/documents/{document_id}")
-async def read_item(document_id: str):
+async def read_item(
+    document_id: str,
+    callback: Optional[str] = Query(None, description="JSONP callback name")
+):
     query = geoblacklight_development.select().where(geoblacklight_development.c.id == document_id)
     document = await database.fetch_one(query)
 
@@ -87,11 +113,15 @@ async def read_item(document_id: str):
         }
     }
 
-    return json_api_response
+    return create_response(json_api_response, callback)
 
 
 @router.get("/documents/")
-async def list_documents(skip: int = 0, limit: int = 10):
+async def list_documents(
+    skip: int = 0,
+    limit: int = 10,
+    callback: Optional[str] = Query(None, description="JSONP callback name")
+):
     query = geoblacklight_development.select().offset(skip).limit(limit)
     documents = await database.fetch_all(query)
 
@@ -115,14 +145,16 @@ async def list_documents(skip: int = 0, limit: int = 10):
             }
         })
 
-    return {"data": processed_documents}
+    return create_response({"data": processed_documents}, callback)
 
 
 @router.post("/index")
-async def index_to_elasticsearch():
+async def index_to_elasticsearch(
+    callback: Optional[str] = Query(None, description="JSONP callback name")
+):
     """Index all documents from PostgreSQL to Elasticsearch."""
     result = await index_documents()
-    return result
+    return create_response(result, callback)
 
 
 @router.get("/search")
@@ -131,7 +163,8 @@ async def search(
     q: Optional[str] = Query(None, description="Search query"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(10, ge=1, le=100, description="Results per page"),
-    sort: SortOption = Query(SortOption.RELEVANCE, description="Sort order")
+    sort: SortOption = Query(SortOption.RELEVANCE, description="Sort order"),
+    callback: Optional[str] = Query(None, description="JSONP callback name")
 ):
     """Search endpoint."""
     try:
@@ -200,20 +233,22 @@ async def search(
         timings["total_response_time"] = f"{(total_time * 1000):.0f}ms"
 
         results["query_time"] = timings
-        return results
+
+        # Sanitize the entire results object for JSON
+        sanitized_results = sanitize_for_json(results)
+
+        return create_response(sanitized_results, callback)
 
     except Exception as e:
         logger.error(f"Search endpoint error", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "Search operation failed",
-                "error": str(e),
-                "query": q,
-                "filters": filter_query if 'filter_query' in locals() else None,
-                "sort": sort.value if sort else None
-            }
-        )
+        error_response = {
+            "message": "Search operation failed",
+            "error": str(e),
+            "query": q,
+            "filters": filter_query if 'filter_query' in locals() else None,
+            "sort": sort.value if sort else None
+        }
+        return create_response(error_response, callback)
 
 
 def extract_filter_queries(params: Dict) -> Dict:
@@ -251,6 +286,7 @@ async def suggest(
     q: str = Query(..., description="Query string for suggestions"),
     resource_class: Optional[str] = Query(None, description="Filter suggestions by resource class"),
     size: int = Query(5, ge=1, le=20, description="Number of suggestions to return"),
+    callback: Optional[str] = Query(None, description="JSONP callback name")
 ):
     """Get autocomplete suggestions."""
     try:
@@ -312,7 +348,7 @@ async def suggest(
                                 }
                             )
 
-        return {
+        response = {
             "data": suggestions,
             "meta": {
                 "query": q,
@@ -321,12 +357,15 @@ async def suggest(
                 "es_response": response_dict,
             },
         }
+        
+        return create_response(response, callback)
 
     except Exception as e:
         # print(f"Suggestion error: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Suggestion error: {str(e)}\nQuery: {suggest_query}"
-        )
+        error_response = {
+            "detail": f"Suggestion error: {str(e)}\nQuery: {suggest_query}"
+        }
+        return create_response(error_response, callback)
 
 
 async def perform_bulk_indexing(bulk_data, index_name, bulk_size=100):

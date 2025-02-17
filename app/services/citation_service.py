@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import json
 import logging
 
@@ -21,13 +21,34 @@ class CitationService:
                 return None
         return None
 
+    def _get_resource_type(self) -> str:
+        """Get the resource type with error handling."""
+        resource_types = self.document.get("gbl_resourcetype_sm", [])
+        if isinstance(resource_types, list) and resource_types:
+            return resource_types[0]
+        return ""
+
+    def _get_creators(self) -> List[str]:
+        """Get creators with error handling."""
+        creators = self.document.get("dct_creator_sm", [])
+        if isinstance(creators, list):
+            return creators
+        return []
+
+    def _get_publishers(self) -> List[str]:
+        """Get publishers with error handling."""
+        publishers = self.document.get("dct_publisher_sm", [])
+        if isinstance(publishers, list):
+            return publishers
+        return []
+
     def get_citation(self) -> str:
         """Generate a simple citation string."""
         try:
             parts = []
 
             # Creators
-            creators = self.document.get("dct_creator_sm", [])
+            creators = self._get_creators()
             if creators:
                 parts.append(f"{', '.join(creators)}.")
             else:
@@ -42,12 +63,13 @@ class CitationService:
                 parts.append(f"{title}.")
 
             # Publisher/Provider based on resource type
-            resource_type = self.document.get("gbl_resourcetype_sm", [""])[0]
+            resource_type = self._get_resource_type()
             if resource_type.lower() in ['datasets', 'web services']:
                 if provider := self.document.get("schema_provider_s"):
                     parts.append(f"{provider}.")
             else:
-                if publishers := self.document.get("dct_publisher_sm"):
+                publishers = self._get_publishers()
+                if publishers:
                     parts.append(f"{', '.join(publishers)}.")
 
             # URL
@@ -63,4 +85,5 @@ class CitationService:
 
         except Exception as e:
             logger.error(f"Citation generation failed: {str(e)}")
+            logger.error(f"Document: {self.document}")
             return "Citation unavailable" 
