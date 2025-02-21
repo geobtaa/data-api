@@ -14,16 +14,17 @@ os.makedirs("logs", exist_ok=True)
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('logs/app.log')  # Write to logs directory
-    ]
+        logging.FileHandler("logs/app.log"),  # Write to logs directory
+    ],
 )
 logger = logging.getLogger(__name__)
 
 # Get CORS origins from environment variable
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -51,6 +52,7 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api/v1")
 
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Global exception handler caught: {str(exc)}", exc_info=True)
@@ -60,5 +62,5 @@ async def global_exception_handler(request: Request, exc: Exception):
             "detail": str(exc),
             "path": str(request.url),
             "method": request.method,
-        }
+        },
     )

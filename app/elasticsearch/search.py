@@ -29,7 +29,7 @@ async def search_documents(
 ):
     """Search documents in Elasticsearch with optional filters and sorting."""
     index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
-    
+
     try:
         # Get the current search criteria
         search_criteria = get_search_criteria(query, fq, skip, limit, sort)
@@ -48,24 +48,28 @@ async def search_documents(
         search_query = {
             "query": {
                 "bool": {
-                    "must": [{"match_all": {}}] if not query else [
-                        {
-                            "multi_match": {
-                                "query": query,
-                                "fields": [
-                                    "dct_title_s^3",
-                                    "dct_description_sm^2",
-                                    "dct_creator_sm",
-                                    "dct_publisher_sm",
-                                    "dct_subject_sm",
-                                    "dcat_theme_sm",
-                                    "dcat_keyword_sm",
-                                    "dct_spatial_sm"
-                                ],
+                    "must": (
+                        [{"match_all": {}}]
+                        if not query
+                        else [
+                            {
+                                "multi_match": {
+                                    "query": query,
+                                    "fields": [
+                                        "dct_title_s^3",
+                                        "dct_description_sm^2",
+                                        "dct_creator_sm",
+                                        "dct_publisher_sm",
+                                        "dct_subject_sm",
+                                        "dcat_theme_sm",
+                                        "dcat_keyword_sm",
+                                        "dct_spatial_sm",
+                                    ],
+                                }
                             }
-                        }
-                    ],
-                    "filter": filter_clauses
+                        ]
+                    ),
+                    "filter": filter_clauses,
                 }
             },
             "from": skip,
@@ -81,18 +85,14 @@ async def search_documents(
                 "creator_agg": {"terms": {"field": "dct_creator_sm"}},
                 "provider_agg": {"terms": {"field": "schema_provider_s"}},
                 "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
-                "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}}
-            }
+                "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
+            },
         }
 
         logger.debug(f"ES Query: {json.dumps(search_query, indent=2)}")
-        
+
         try:
-            response = await es.search(
-                index=index_name,
-                body=search_query,
-                track_total_hits=True
-            )
+            response = await es.search(index=index_name, body=search_query, track_total_hits=True)
         except Exception as es_error:
             logger.error(f"Elasticsearch error: {str(es_error)}", exc_info=True)
             raise HTTPException(
@@ -101,12 +101,12 @@ async def search_documents(
                     "message": "Elasticsearch query failed",
                     "error": str(es_error),
                     "query": search_query,
-                    "index": index_name
-                }
+                    "index": index_name,
+                },
             )
-        
+
         logger.info(f"ES Response status: {response.meta.status}")
-        
+
         return await process_search_response(response, limit, skip, search_criteria)
 
     except Exception as e:
@@ -178,7 +178,7 @@ async def process_search_response(response, limit, skip, search_criteria):
     try:
         total_hits = response.body["hits"]["total"]["value"]
         logger.debug(f"Total hits: {total_hits}")
-        
+
         document_ids = [hit["_source"]["id"] for hit in response.body["hits"]["hits"]]
         logger.debug(f"Found document IDs: {document_ids}")
 
@@ -186,7 +186,10 @@ async def process_search_response(response, limit, skip, search_criteria):
             logger.debug("No documents found")
             return {
                 "status": "success",
-                "query_time": {"elasticsearch": response.body["took"].__str__() + "ms", "postgresql": "0ms"},
+                "query_time": {
+                    "elasticsearch": response.body["took"].__str__() + "ms",
+                    "postgresql": "0ms",
+                },
                 "meta": {
                     "pages": {
                         "current_page": (skip // limit) + 1,
@@ -269,17 +272,14 @@ async def process_search_response(response, limit, skip, search_criteria):
 
     except Exception as e:
         import traceback
+
         error_trace = traceback.format_exc()
         logger.error(f"Process response error: {str(e)}", exc_info=True)
         logger.error(f"Full traceback:\n{error_trace}")
         logger.error(f"Response body: {response.body}")
         raise HTTPException(
             status_code=500,
-            detail={
-                "error": str(e),
-                "traceback": error_trace,
-                "response": response.body
-            }
+            detail={"error": str(e), "traceback": error_trace, "response": response.body},
         )
 
 

@@ -4,8 +4,8 @@ import os
 from tqdm import tqdm
 
 # List available CSV files in the fixtures directory
-fixtures_dir = 'fixtures'
-csv_files = [f for f in os.listdir(fixtures_dir) if f.endswith('.csv')]
+fixtures_dir = "fixtures"
+csv_files = [f for f in os.listdir(fixtures_dir) if f.endswith(".csv")]
 
 if not csv_files:
     print("No CSV files found in the fixtures directory.")
@@ -30,25 +30,27 @@ data = pd.read_csv(csv_file_path, low_memory=False)
 
 # Connect to PostgreSQL using environment variables
 conn = psycopg2.connect(
-    dbname=os.getenv('DB_NAME', 'geoblacklight_development'),  # Default to 'geoblacklight_development' if not set
-    user=os.getenv('DB_USER', 'postgres'),              # Default to 'postgres' if not set
-    password=os.getenv('DB_PASSWORD', 'postgres'),      # Default to 'postgres' if not set
-    host=os.getenv('DB_HOST', 'localhost'),             # Default to 'localhost' if not set
-    port=os.getenv('DB_PORT', '2345')                   # Default to '2345' if not set
+    dbname=os.getenv(
+        "DB_NAME", "geoblacklight_development"
+    ),  # Default to 'geoblacklight_development' if not set
+    user=os.getenv("DB_USER", "postgres"),  # Default to 'postgres' if not set
+    password=os.getenv("DB_PASSWORD", "postgres"),  # Default to 'postgres' if not set
+    host=os.getenv("DB_HOST", "localhost"),  # Default to 'localhost' if not set
+    port=os.getenv("DB_PORT", "2345"),  # Default to '2345' if not set
 )
 cursor = conn.cursor()
 
 # Drop indexes before import
-drop_indexes_query = '''
+drop_indexes_query = """
 DROP INDEX IF EXISTS idx_dct_title_s;
 DROP INDEX IF EXISTS idx_dct_alternative_sm;
 -- Add more DROP INDEX statements for other indexes as needed
-'''
+"""
 cursor.execute(drop_indexes_query)
 conn.commit()
 
 # Create table without the generated column first
-create_table_query = '''
+create_table_query = """
 CREATE TABLE IF NOT EXISTS geoblacklight_development (
     id VARCHAR PRIMARY KEY,
     dct_title_s VARCHAR,
@@ -93,15 +95,17 @@ CREATE TABLE IF NOT EXISTS geoblacklight_development (
     gbl_suppressed_b BOOLEAN,
     gbl_georeferenced_b BOOLEAN
 );
-'''
+"""
 cursor.execute(create_table_query)
 conn.commit()
+
 
 # Function to convert pipe-delimited strings to arrays
 def convert_to_array(value):
     if pd.isna(value):
         return None
-    return value.split('|')
+    return value.split("|")
+
 
 # Function to convert values to boolean
 def convert_to_boolean(value):
@@ -109,20 +113,23 @@ def convert_to_boolean(value):
         return None
     return bool(value)
 
+
 # Function to handle NaN values
 def handle_nan(value):
     if pd.isna(value):
         return None
     return value
 
+
 # Function to convert pipe-delimited strings to arrays of integers
 def convert_to_int_array(value):
     if pd.isna(value):
         return None
-    return [int(x) for x in value.split('|') if x.isdigit()]
+    return [int(x) for x in value.split("|") if x.isdigit()]
+
 
 # Define the insert query with ON CONFLICT to skip duplicates
-insert_query = '''
+insert_query = """
 INSERT INTO geoblacklight_development (
     id, dct_title_s, dct_alternative_sm, dct_description_sm, dct_language_sm,
     gbl_displayNote_sm, dct_creator_sm, dct_publisher_sm, schema_provider_s,
@@ -137,7 +144,7 @@ INSERT INTO geoblacklight_development (
 ) VALUES (
     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
 ) ON CONFLICT (id) DO NOTHING;
-'''
+"""
 
 # Insert data into the table with batch processing
 batch_size = 1000  # Adjust the batch size as needed
@@ -145,50 +152,52 @@ batch = []
 
 print("Inserting records into the database...")
 for index, row in tqdm(data.iterrows(), total=data.shape[0], desc="Progress"):
-    batch.append((
-        handle_nan(row['id']),
-        handle_nan(row['dct_title_s']),
-        convert_to_array(row['dct_alternative_sm']),
-        convert_to_array(row['dct_description_sm']),
-        convert_to_array(row['dct_language_sm']),
-        convert_to_array(row['gbl_displayNote_sm']),
-        convert_to_array(row['dct_creator_sm']),
-        convert_to_array(row['dct_publisher_sm']),
-        handle_nan(row['schema_provider_s']),
-        convert_to_array(row['gbl_resourceClass_sm']),
-        convert_to_array(row['gbl_resourceType_sm']),
-        convert_to_array(row['dct_subject_sm']),
-        convert_to_array(row['dcat_theme_sm']),
-        convert_to_array(row['dcat_keyword_sm']),
-        convert_to_array(row['dct_temporal_sm']),
-        handle_nan(row['dct_issued_s']),
-        convert_to_int_array(row['gbl_indexYear_im']),
-        convert_to_array(row['gbl_dateRange_drsim']),
-        convert_to_array(row['dct_spatial_sm']),
-        handle_nan(row['locn_geometry']),
-        handle_nan(row['dcat_bbox']),
-        handle_nan(row['dcat_centroid']),
-        convert_to_array(row['dct_relation_sm']),
-        convert_to_array(row['pcdm_memberOf_sm']),
-        convert_to_array(row['dct_isPartOf_sm']),
-        convert_to_array(row['dct_source_sm']),
-        convert_to_array(row['dct_isVersionOf_sm']),
-        convert_to_array(row['dct_replaces_sm']),
-        convert_to_array(row['dct_isReplacedBy_sm']),
-        convert_to_array(row['dct_rights_sm']),
-        convert_to_array(row['dct_rightsHolder_sm']),
-        convert_to_array(row['dct_license_sm']),
-        handle_nan(row['dct_accessRights_s']),
-        handle_nan(row['dct_format_s']),
-        handle_nan(row['gbl_fileSize_s']),
-        handle_nan(row['gbl_wxsIdentifier_s']),
-        handle_nan(row['dct_references_s']),
-        convert_to_array(row['dct_identifier_sm']),
-        handle_nan(row['gbl_mdModified_dt']),
-        handle_nan(row['gbl_mdVersion_s']),
-        convert_to_boolean(row['gbl_suppressed_b']),
-        convert_to_boolean(row['gbl_georeferenced_b'])
-    ))
+    batch.append(
+        (
+            handle_nan(row["id"]),
+            handle_nan(row["dct_title_s"]),
+            convert_to_array(row["dct_alternative_sm"]),
+            convert_to_array(row["dct_description_sm"]),
+            convert_to_array(row["dct_language_sm"]),
+            convert_to_array(row["gbl_displayNote_sm"]),
+            convert_to_array(row["dct_creator_sm"]),
+            convert_to_array(row["dct_publisher_sm"]),
+            handle_nan(row["schema_provider_s"]),
+            convert_to_array(row["gbl_resourceClass_sm"]),
+            convert_to_array(row["gbl_resourceType_sm"]),
+            convert_to_array(row["dct_subject_sm"]),
+            convert_to_array(row["dcat_theme_sm"]),
+            convert_to_array(row["dcat_keyword_sm"]),
+            convert_to_array(row["dct_temporal_sm"]),
+            handle_nan(row["dct_issued_s"]),
+            convert_to_int_array(row["gbl_indexYear_im"]),
+            convert_to_array(row["gbl_dateRange_drsim"]),
+            convert_to_array(row["dct_spatial_sm"]),
+            handle_nan(row["locn_geometry"]),
+            handle_nan(row["dcat_bbox"]),
+            handle_nan(row["dcat_centroid"]),
+            convert_to_array(row["dct_relation_sm"]),
+            convert_to_array(row["pcdm_memberOf_sm"]),
+            convert_to_array(row["dct_isPartOf_sm"]),
+            convert_to_array(row["dct_source_sm"]),
+            convert_to_array(row["dct_isVersionOf_sm"]),
+            convert_to_array(row["dct_replaces_sm"]),
+            convert_to_array(row["dct_isReplacedBy_sm"]),
+            convert_to_array(row["dct_rights_sm"]),
+            convert_to_array(row["dct_rightsHolder_sm"]),
+            convert_to_array(row["dct_license_sm"]),
+            handle_nan(row["dct_accessRights_s"]),
+            handle_nan(row["dct_format_s"]),
+            handle_nan(row["gbl_fileSize_s"]),
+            handle_nan(row["gbl_wxsIdentifier_s"]),
+            handle_nan(row["dct_references_s"]),
+            convert_to_array(row["dct_identifier_sm"]),
+            handle_nan(row["gbl_mdModified_dt"]),
+            handle_nan(row["gbl_mdVersion_s"]),
+            convert_to_boolean(row["gbl_suppressed_b"]),
+            convert_to_boolean(row["gbl_georeferenced_b"]),
+        )
+    )
 
     if len(batch) >= batch_size:
         cursor.executemany(insert_query, batch)
@@ -203,11 +212,11 @@ if batch:
 print("Data insertion complete.")
 
 # Recreate indexes after import
-create_indexes_query = '''
+create_indexes_query = """
 CREATE INDEX idx_dct_title_s ON geoblacklight_development (dct_title_s);
 CREATE INDEX idx_dct_alternative_sm ON geoblacklight_development USING gin (dct_alternative_sm);
 -- Add more CREATE INDEX statements for other indexes as needed
-'''
+"""
 cursor.execute(create_indexes_query)
 conn.commit()
 

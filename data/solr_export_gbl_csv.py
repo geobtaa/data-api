@@ -11,9 +11,9 @@ params = [
 ]
 
 # Load fields from JSON Schema
-with open('aardvark_json_schema.json', 'r') as schema_file:
+with open("aardvark_json_schema.json", "r") as schema_file:
     schema = json.load(schema_file)
-    fields = schema.get('properties', [])
+    fields = schema.get("properties", [])
 
 separator = "|"
 

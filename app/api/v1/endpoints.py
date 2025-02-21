@@ -72,8 +72,7 @@ def create_response(content: Dict, callback: Optional[str] = None) -> JSONRespon
 
 @router.get("/documents/{document_id}")
 async def read_item(
-    document_id: str,
-    callback: Optional[str] = Query(None, description="JSONP callback name")
+    document_id: str, callback: Optional[str] = Query(None, description="JSONP callback name")
 ):
     query = geoblacklight_development.select().where(geoblacklight_development.c.id == document_id)
     document = await database.fetch_one(query)
@@ -120,7 +119,7 @@ async def read_item(
 async def list_documents(
     skip: int = 0,
     limit: int = 10,
-    callback: Optional[str] = Query(None, description="JSONP callback name")
+    callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
     query = geoblacklight_development.select().offset(skip).limit(limit)
     documents = await database.fetch_all(query)
@@ -131,19 +130,21 @@ async def list_documents(
         doc_dict = add_thumbnail_url(doc_dict)
         doc_dict = add_citations(doc_dict)
         viewer_attributes = create_viewer_attributes(doc_dict)
-        processed_documents.append({
-            "type": "document",
-            "id": str(doc_dict["id"]),
-            "attributes": {
-                **doc_dict,
-                **viewer_attributes,
-                "ui_citation": doc_dict.get("ui_citation"),
-                "ui_thumbnail_url": doc_dict.get("ui_thumbnail_url"),
-                "ui_viewer_endpoint": viewer_attributes.get("ui_viewer_endpoint"),
-                "ui_viewer_geometry": viewer_attributes.get("ui_viewer_geometry"),
-                "ui_viewer_protocol": viewer_attributes.get("ui_viewer_protocol"),
+        processed_documents.append(
+            {
+                "type": "document",
+                "id": str(doc_dict["id"]),
+                "attributes": {
+                    **doc_dict,
+                    **viewer_attributes,
+                    "ui_citation": doc_dict.get("ui_citation"),
+                    "ui_thumbnail_url": doc_dict.get("ui_thumbnail_url"),
+                    "ui_viewer_endpoint": viewer_attributes.get("ui_viewer_endpoint"),
+                    "ui_viewer_geometry": viewer_attributes.get("ui_viewer_geometry"),
+                    "ui_viewer_protocol": viewer_attributes.get("ui_viewer_protocol"),
+                },
             }
-        })
+        )
 
     return create_response({"data": processed_documents}, callback)
 
@@ -164,7 +165,7 @@ async def search(
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(10, ge=1, le=100, description="Results per page"),
     sort: SortOption = Query(SortOption.RELEVANCE, description="Sort order"),
-    callback: Optional[str] = Query(None, description="JSONP callback name")
+    callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
     """Search endpoint."""
     try:
@@ -181,11 +182,7 @@ async def search(
         # Elasticsearch query
         es_start = time.time()
         results = await search_documents(
-            query=q,
-            fq=filter_query,
-            skip=skip,
-            limit=limit,
-            sort=SORT_MAPPINGS[sort]
+            query=q, fq=filter_query, skip=skip, limit=limit, sort=SORT_MAPPINGS[sort]
         )
         es_time = (time.time() - es_start) * 1000
         timings["elasticsearch"] = f"{es_time:.0f}ms"
@@ -199,7 +196,7 @@ async def search(
 
         for document in results["data"]:
             doc_start = time.time()
-            
+
             # Add thumbnail URL
             thumb_start = time.time()
             image_service = ImageService(document["attributes"])
@@ -226,7 +223,7 @@ async def search(
             "per_document": f"{((process_time/docs_processed) * 1000):.0f}ms",
             "thumbnail_service": f"{(thumbnail_time * 1000):.0f}ms",
             "citation_service": f"{(citation_time * 1000):.0f}ms",
-            "viewer_service": f"{(viewer_time * 1000):.0f}ms"
+            "viewer_service": f"{(viewer_time * 1000):.0f}ms",
         }
 
         total_time = time.time() - start_time
@@ -245,8 +242,8 @@ async def search(
             "message": "Search operation failed",
             "error": str(e),
             "query": q,
-            "filters": filter_query if 'filter_query' in locals() else None,
-            "sort": sort.value if sort else None
+            "filters": filter_query if "filter_query" in locals() else None,
+            "sort": sort.value if sort else None,
         }
         return create_response(error_response, callback)
 
@@ -286,7 +283,7 @@ async def suggest(
     q: str = Query(..., description="Query string for suggestions"),
     resource_class: Optional[str] = Query(None, description="Filter suggestions by resource class"),
     size: int = Query(5, ge=1, le=20, description="Number of suggestions to return"),
-    callback: Optional[str] = Query(None, description="JSONP callback name")
+    callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
     """Get autocomplete suggestions."""
     try:
@@ -357,14 +354,12 @@ async def suggest(
                 "es_response": response_dict,
             },
         }
-        
+
         return create_response(response, callback)
 
     except Exception as e:
         # print(f"Suggestion error: {e}")
-        error_response = {
-            "detail": f"Suggestion error: {str(e)}\nQuery: {suggest_query}"
-        }
+        error_response = {"detail": f"Suggestion error: {str(e)}\nQuery: {suggest_query}"}
         return create_response(error_response, callback)
 
 
@@ -372,12 +367,12 @@ async def perform_bulk_indexing(bulk_data, index_name, bulk_size=100):
     """Perform bulk indexing in smaller chunks."""
     # Split the bulk_data into smaller chunks
     for i in range(0, len(bulk_data), bulk_size):
-        chunk = bulk_data[i:i + bulk_size]
+        chunk = bulk_data[i : i + bulk_size]
         try:
             # Perform the bulk operation for the current chunk
             response = await es.bulk(operations=chunk, index=index_name, refresh=True)
             # Check for errors in the response
-            if response.get('errors'):
+            if response.get("errors"):
                 logger.error(f"Errors occurred during bulk indexing: {response['items']}")
         except Exception as e:
             logger.error(f"Exception during bulk indexing: {str(e)}")

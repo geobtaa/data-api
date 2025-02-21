@@ -4,6 +4,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class CitationService:
     """Service for generating simple citations."""
 
@@ -16,7 +17,9 @@ class CitationService:
         if isinstance(references, str):
             try:
                 references = json.loads(references)
-                return references.get("http://schema.org/url") or references.get("http://schema.org/downloadUrl")
+                return references.get("http://schema.org/url") or references.get(
+                    "http://schema.org/downloadUrl"
+                )
             except json.JSONDecodeError:
                 return None
         return None
@@ -64,7 +67,7 @@ class CitationService:
 
             # Publisher/Provider based on resource type
             resource_type = self._get_resource_type()
-            if resource_type.lower() in ['datasets', 'web services']:
+            if resource_type.lower() in ["datasets", "web services"]:
                 if provider := self.document.get("schema_provider_s"):
                     parts.append(f"{provider}.")
             else:
@@ -86,4 +89,4 @@ class CitationService:
         except Exception as e:
             logger.error(f"Citation generation failed: {str(e)}")
             logger.error(f"Document: {self.document}")
-            return "Citation unavailable" 
+            return "Citation unavailable"

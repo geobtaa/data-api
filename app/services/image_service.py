@@ -114,7 +114,9 @@ class ImageService:
             # Direct thumbnail URL - fastest path
             if "http://schema.org/thumbnailUrl" in references:
                 url = references["http://schema.org/thumbnailUrl"]
-                return url.replace("/full/full/0/", "/full/400,/0/") if "/full/full/0/" in url else url
+                return (
+                    url.replace("/full/full/0/", "/full/400,/0/") if "/full/full/0/" in url else url
+                )
 
             # IIIF Image API - fast path
             if "http://iiif.io/api/image" in references:
@@ -129,7 +131,7 @@ class ImageService:
                 manifest_url = references.get(
                     "https://iiif.io/api/presentation/2/context.json"
                 ) or references.get("http://iiif.io/api/presentation#manifest")
-                
+
                 # Use cached manifest
                 manifest_json = self._get_cached_manifest(manifest_url)
                 if manifest_json:
@@ -137,7 +139,7 @@ class ImageService:
                     if "sequences" in manifest_json:
                         canvas = manifest_json.get("sequences", [{}])[0].get("canvases", [{}])[0]
                         image = canvas.get("images", [{}])[0].get("resource", {})
-                        
+
                         if "@id" in image and "/full/full/0/" in image["@id"]:
                             return image["@id"].replace("/full/full/0/", "/full/400,/0/")
                         return image.get("@id")
@@ -167,7 +169,9 @@ class ImageService:
                     f"HEIGHT={height}&"
                     f"LAYERS={layers}"
                 )
-                return url.replace("/full/full/0/", "/full/400,/0/") if "/full/full/0/" in url else url
+                return (
+                    url.replace("/full/full/0/", "/full/400,/0/") if "/full/full/0/" in url else url
+                )
 
             # Check for TMS
             elif "http://www.opengis.net/def/serviceType/ogc/tms" in references:

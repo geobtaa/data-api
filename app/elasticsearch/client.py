@@ -10,17 +10,18 @@ es = AsyncElasticsearch(os.getenv("ELASTICSEARCH_URL", "http://elasticsearch:920
 
 logger = logging.getLogger(__name__)
 
+
 async def init_elasticsearch():
     """Initialize Elasticsearch index and mappings."""
     from .mappings import INDEX_MAPPING
 
     index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
-    
+
     try:
         # Test the connection
         info = await es.info()
         logger.info(f"Connected to Elasticsearch cluster: {info.body['cluster_name']}")
-        
+
         # Check if index exists
         exists = await es.indices.exists(index=index_name)
         if not exists:
@@ -31,7 +32,7 @@ async def init_elasticsearch():
             )
         else:
             logger.info(f"Index {index_name} already exists")
-            
+
     except Exception as e:
         logger.error(f"Elasticsearch initialization error: {str(e)}", exc_info=True)
         raise
