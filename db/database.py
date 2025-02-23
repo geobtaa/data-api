@@ -8,6 +8,9 @@ load_dotenv()
 # Get the database URL from the environment variable
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set")
+
 # Convert the DATABASE_URL to use asyncpg if it's using postgres://
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
