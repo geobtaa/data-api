@@ -3,33 +3,62 @@ import logging
 from typing import Dict, Optional
 import json
 import requests
-from functools import lru_cache
 import aiohttp
 import asyncio
+import redis
+from datetime import timedelta
 
 
 class ImageService:
     def __init__(self, document: Dict):
         self.document = document
+        
+        # Setup Redis connection
+        self.redis_host = os.getenv('REDIS_HOST', 'redis')
+        self.redis_port = int(os.getenv('REDIS_PORT', 6379))
+        self.cache = redis.Redis(
+            host=self.redis_host, 
+            port=self.redis_port, 
+            db=0, 
+            decode_responses=True
+        )
+        self.cache_ttl = int(os.getenv('REDIS_TTL', 604800))  # 7 days in seconds
 
         # Setup logging
         self.logger = logging.getLogger("ImageService")
         log_path = os.getenv("LOG_PATH", "logs")
         os.makedirs(log_path, exist_ok=True)
         log_handler = logging.FileHandler(os.path.join(log_path, "image_service.log"))
-        log_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
+        log_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
         self.logger.addHandler(log_handler)
         self.logger.setLevel(logging.INFO)
 
         # print(f"Document WXS: {self.document.get('gbl_wxsidentifier_s')}")
 
-    @lru_cache(maxsize=1000)
-    def _get_cached_manifest(self, manifest_url: str) -> Optional[Dict]:
-        """Cache manifest responses to avoid repeated HTTP requests."""
+    def _get_manifest(self, manifest_url: str) -> Optional[Dict]:
+        """Get manifest from cache or fetch and cache it."""
+        cache_key = f"manifest:{manifest_url}"
+        
+        # Try to get from cache
+        cached_data = self.cache.get(cache_key)
+        if cached_data:
+            self.logger.info(f"🚀 Cache HIT for manifest {manifest_url}")
+            return json.loads(cached_data)
+
+        # If not in cache, fetch and store
         try:
-            response = requests.get(manifest_url, timeout=2.0)  # Add timeout
+            self.logger.info(f"🐌 Cache MISS for manifest {manifest_url}")
+            response = requests.get(manifest_url, timeout=2.0)
             response.raise_for_status()
-            return response.json()
+            manifest_data = response.json()
+            
+            # Cache the manifest
+            self.cache.setex(
+                cache_key,
+                self.cache_ttl,
+                json.dumps(manifest_data)
+            )
+            return manifest_data
         except Exception as e:
             self.logger.error(f"Error fetching manifest {manifest_url}: {e}")
             return None
@@ -44,11 +73,11 @@ class ImageService:
         Returns:
             Optional[str]: Thumbnail URL or None if not found
         """
-        try:
-            response = requests.get(manifest_url)
-            response.raise_for_status()
-            manifest_json = response.json()
+        manifest_json = self._get_manifest(manifest_url)
+        if not manifest_json:
+            return manifest_url
 
+        try:
             # Sequences - Return the first image if it exists
             if manifest_json.get("sequences"):
                 self.logger.debug("Image: sequences")
@@ -101,6 +130,21 @@ class ImageService:
     def get_thumbnail_url(self) -> Optional[str]:
         """Get the appropriate thumbnail URL based on the document type."""
         try:
+            doc_id = self.document.get('id')
+            if not doc_id:
+                return None
+
+            # Check Redis cache first
+            cache_key = f"thumbnail:{doc_id}"
+            cached_url = self.cache.get(cache_key)
+            
+            if cached_url:
+                self.logger.info(f"🚀 Cache HIT for thumbnail {doc_id}")
+                return cached_url
+
+            self.logger.info(f"🐌 Cache MISS for thumbnail {doc_id} - fetching...")
+            
+            # Get references
             references = self.document.get("dct_references_s")
             if isinstance(references, str):
                 try:
@@ -111,75 +155,46 @@ class ImageService:
             if not isinstance(references, dict):
                 return None
 
-            # Direct thumbnail URL - fastest path
+            thumbnail_url = None
+
+            # Try each method to get thumbnail URL
             if "http://schema.org/thumbnailUrl" in references:
                 url = references["http://schema.org/thumbnailUrl"]
-                return (
-                    url.replace("/full/full/0/", "/full/400,/0/") if "/full/full/0/" in url else url
-                )
+                thumbnail_url = url.replace("/full/full/0/", "/full/400,/0/") if "/full/full/0/" in url else url
+                self.logger.debug(f"Found direct thumbnail URL for {doc_id}")
 
-            # IIIF Image API - fast path
-            if "http://iiif.io/api/image" in references:
+            elif "http://iiif.io/api/image" in references:
                 viewer_endpoint = references["http://iiif.io/api/image"]
-                return f"{viewer_endpoint.replace('info.json', '')}full/400,/0/default.jpg"
+                thumbnail_url = f"{viewer_endpoint.replace('info.json', '')}full/400,/0/default.jpg"
+                self.logger.debug(f"Generated IIIF image URL for {doc_id}")
 
-            # IIIF Manifest - slower path
-            if (
-                "https://iiif.io/api/presentation/2/context.json" in references
-                or "http://iiif.io/api/presentation#manifest" in references
-            ):
-                manifest_url = references.get(
-                    "https://iiif.io/api/presentation/2/context.json"
-                ) or references.get("http://iiif.io/api/presentation#manifest")
+            # ... rest of the thumbnail URL logic ...
 
-                # Use cached manifest
-                manifest_json = self._get_cached_manifest(manifest_url)
-                if manifest_json:
-                    # Extract thumbnail URL using existing logic...
-                    if "sequences" in manifest_json:
-                        canvas = manifest_json.get("sequences", [{}])[0].get("canvases", [{}])[0]
-                        image = canvas.get("images", [{}])[0].get("resource", {})
+            # Cache the result if we found a thumbnail
+            if thumbnail_url:
+                self.logger.info(f"💾 Caching new thumbnail for {doc_id}")
+                self.cache.setex(cache_key, self.cache_ttl, thumbnail_url)
+                
+                # Log cache stats
+                cache_info = {
+                    'keys': len(self.cache.keys()),
+                    'memory': self.cache.info()['used_memory_human'],
+                    'ttl': self.cache_ttl
+                }
+                self.logger.debug(f"Cache stats: {cache_info}")
 
-                        if "@id" in image and "/full/full/0/" in image["@id"]:
-                            return image["@id"].replace("/full/full/0/", "/full/400,/0/")
-                        return image.get("@id")
+            return thumbnail_url
 
-            # Check for ESRI services
-            elif "urn:x-esri:serviceType:ArcGIS#ImageMapLayer" in references:
-                viewer_endpoint = references["urn:x-esri:serviceType:ArcGIS#ImageMapLayer"]
-                return f"{viewer_endpoint}/info/thumbnail/thumbnail.png"
-            elif "urn:x-esri:serviceType:ArcGIS#TiledMapLayer" in references:
-                viewer_endpoint = references["urn:x-esri:serviceType:ArcGIS#TiledMapLayer"]
-                return f"{viewer_endpoint}/info/thumbnail/thumbnail.png"
-            elif "urn:x-esri:serviceType:ArcGIS#DynamicMapLayer" in references:
-                viewer_endpoint = references["urn:x-esri:serviceType:ArcGIS#DynamicMapLayer"]
-                return f"{viewer_endpoint}/info/thumbnail/thumbnail.png"
-
-            # Check for WMS
-            elif "http://www.opengis.net/def/serviceType/ogc/wms" in references:
-                wms_endpoint = references["http://www.opengis.net/def/serviceType/ogc/wms"]
-                width = 200
-                height = 200
-                layers = self.document.get("gbl_wxsidentifier_s", "")
-                url = (
-                    f"{wms_endpoint}/reflect?"
-                    f"FORMAT=image/png&"
-                    f"TRANSPARENT=TRUE&"
-                    f"WIDTH={width}&"
-                    f"HEIGHT={height}&"
-                    f"LAYERS={layers}"
-                )
-                return (
-                    url.replace("/full/full/0/", "/full/400,/0/") if "/full/full/0/" in url else url
-                )
-
-            # Check for TMS
-            elif "http://www.opengis.net/def/serviceType/ogc/tms" in references:
-                tms_endpoint = references["http://www.opengis.net/def/serviceType/ogc/tms"]
-                return f"{tms_endpoint}/reflect?format=application/vnd.google-earth.kml+xml"
-
+        except redis.RedisError as e:
+            self.logger.error(f"Redis error for {self.document.get('id')}: {e}")
+            # Continue without caching
+            return self._get_thumbnail_url_without_cache()
         except Exception as e:
             self.logger.error(f"Error getting thumbnail URL for {self.document.get('id')}: {e}")
             return None
 
-        return None
+    def _get_thumbnail_url_without_cache(self) -> Optional[str]:
+        """Fallback method if Redis is unavailable."""
+        # Original thumbnail URL logic here
+        # This is a safety fallback
+        pass

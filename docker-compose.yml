@@ -12,12 +12,17 @@ services:
       - LOG_PATH=/app/logs
       - APPLICATION_URL=http://localhost:8000
       - CORS_ORIGINS=http://localhost:5173,https://ewlarson.github.io,https://data-api.ngrok.io
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_TTL=604800  # 7 days in seconds
     ports:
       - "8000:8000"
     depends_on:
       elasticsearch:
         condition: service_healthy
       paradedb:
+        condition: service_started
+      redis:
         condition: service_started
     volumes:
       - ./logs:/app/logs
@@ -58,9 +63,26 @@ services:
     networks:
       - elastic
 
+  redis:
+    image: redis:7.2
+    container_name: data-api-redis
+    command: redis-server --appendonly yes  # Enable persistence
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - elastic
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
 volumes:
   elasticsearch-data:
   paradedb-data:
+  redis-data:  # Add Redis volume
 
 networks:
   elastic:
