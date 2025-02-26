@@ -14,7 +14,7 @@ from ...services.image_service import ImageService
 from ...services.citation_service import CitationService
 import logging
 import time
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from .jsonp import JSONPResponse
 from datetime import datetime
 
@@ -377,3 +377,23 @@ async def perform_bulk_indexing(bulk_data, index_name, bulk_size=100):
         except Exception as e:
             logger.error(f"Exception during bulk indexing: {str(e)}")
             # Optionally, implement retry logic here
+
+
+@router.get("/thumbnails/{image_hash}")
+async def get_thumbnail(image_hash: str):
+    """Serve a cached thumbnail image."""
+    try:
+        # Create service without document (we only need cache access)
+        image_service = ImageService({})
+        image_data = await image_service.get_cached_image(image_hash)
+        
+        if image_data:
+            return Response(
+                content=image_data,
+                media_type="image/jpeg",
+                headers={"Cache-Control": "public, max-age=31536000"}  # Cache for 1 year
+            )
+        
+        raise HTTPException(status_code=404, detail="Image not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
