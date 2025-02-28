@@ -386,14 +386,14 @@ async def get_thumbnail(image_hash: str):
         # Create service without document (we only need cache access)
         image_service = ImageService({})
         image_data = await image_service.get_cached_image(image_hash)
-        
+
         if image_data:
             return Response(
                 content=image_data,
                 media_type="image/jpeg",
-                headers={"Cache-Control": "public, max-age=31536000"}  # Cache for 1 year
+                headers={"Cache-Control": "public, max-age=31536000"},  # Cache for 1 year
             )
-        
+
         raise HTTPException(status_code=404, detail="Image not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

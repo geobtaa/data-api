@@ -15,25 +15,22 @@ import re
 class ImageService:
     def __init__(self, document: Dict):
         self.document = document
-        
+
         # Setup Redis connection
-        self.redis_host = os.getenv('REDIS_HOST', 'redis')
-        self.redis_port = int(os.getenv('REDIS_PORT', 6379))
-        self.application_url = os.getenv('APPLICATION_URL', 'http://localhost:8000').rstrip('/')
+        self.redis_host = os.getenv("REDIS_HOST", "redis")
+        self.redis_port = int(os.getenv("REDIS_PORT", 6379))
+        self.application_url = os.getenv("APPLICATION_URL", "http://localhost:8000").rstrip("/")
         self.cache = redis.Redis(
-            host=self.redis_host, 
-            port=self.redis_port, 
-            db=0, 
-            decode_responses=True
+            host=self.redis_host, port=self.redis_port, db=0, decode_responses=True
         )
-        self.cache_ttl = int(os.getenv('REDIS_TTL', 604800))  # 7 days in seconds
+        self.cache_ttl = int(os.getenv("REDIS_TTL", 604800))  # 7 days in seconds
 
         # Setup binary Redis connection for images
         self.image_cache = redis.Redis(
             host=self.redis_host,
             port=self.redis_port,
             db=1,  # Use different DB for images
-            decode_responses=False
+            decode_responses=False,
         )
 
         # Setup logging
@@ -50,7 +47,7 @@ class ImageService:
     def _get_manifest(self, manifest_url: str) -> Optional[Dict]:
         """Get manifest from cache or fetch and cache it."""
         cache_key = f"manifest:{manifest_url}"
-        
+
         # Try to get from cache
         cached_data = self.cache.get(cache_key)
         if cached_data:
@@ -63,13 +60,9 @@ class ImageService:
             response = requests.get(manifest_url, timeout=2.0)
             response.raise_for_status()
             manifest_data = response.json()
-            
+
             # Cache the manifest
-            self.cache.setex(
-                cache_key,
-                self.cache_ttl,
-                json.dumps(manifest_data)
-            )
+            self.cache.setex(cache_key, self.cache_ttl, json.dumps(manifest_data))
             return manifest_data
         except Exception as e:
             self.logger.error(f"Error fetching manifest {manifest_url}: {e}")
@@ -146,18 +139,25 @@ class ImageService:
         """
         try:
             # Skip if not a IIIF URL
-            if not any(x in url.lower() for x in ['/iiif/', 'info.json']):
+            if not any(x in url.lower() for x in ["/iiif/", "info.json"]):
                 return url
 
             # Remove any existing size parameters
             base_url = url
-            for pattern in ['/full/full/', '/full/,/', '/full/!/', '/full/\d+,/', '/full/,\d+/', '/full/\d+,\d+/']:
-                base_url = re.sub(pattern, '/full/', base_url, flags=re.IGNORECASE)
+            for pattern in [
+                "/full/full/",
+                "/full/,/",
+                "/full/!/",
+                "/full/\d+,/",
+                "/full/,\d+/",
+                "/full/\d+,\d+/",
+            ]:
+                base_url = re.sub(pattern, "/full/", base_url, flags=re.IGNORECASE)
 
             # Add our standard size
-            if '/full/' in base_url:
-                return base_url.replace('/full/', '/full/400,/')
-            
+            if "/full/" in base_url:
+                return base_url.replace("/full/", "/full/400,/")
+
             return url
         except Exception as e:
             self.logger.error(f"Error standardizing IIIF URL {url}: {e}")
@@ -166,7 +166,7 @@ class ImageService:
     def get_thumbnail_url(self) -> Optional[str]:
         """Get the appropriate thumbnail URL based on the document type."""
         try:
-            doc_id = self.document.get('id')
+            doc_id = self.document.get("id")
             if not doc_id:
                 return None
 
@@ -234,17 +234,19 @@ class ImageService:
             # TMS
             elif "http://www.opengis.net/def/serviceType/ogc/tms" in references:
                 tms_endpoint = references["http://www.opengis.net/def/serviceType/ogc/tms"]
-                thumbnail_url = f"{tms_endpoint}/reflect?format=application/vnd.google-earth.kml+xml"
+                thumbnail_url = (
+                    f"{tms_endpoint}/reflect?format=application/vnd.google-earth.kml+xml"
+                )
 
             if thumbnail_url:
                 # Check if we have the image cached
                 image_key = f"image:{hashlib.sha256(thumbnail_url.encode()).hexdigest()}"
                 image_hash = hashlib.sha256(thumbnail_url.encode()).hexdigest()
-                
+
                 if self.image_cache.exists(image_key):
                     self.logger.info(f"🚀 Cache HIT for image {doc_id}")
                     return f"{self.application_url}/api/v1/thumbnails/{image_hash}"
-                
+
                 # If not cached, queue for background processing and return original URL
                 self.logger.info(f"🐌 Queueing image fetch for {doc_id}: {thumbnail_url}")
                 task = fetch_and_cache_image.delay(thumbnail_url)
