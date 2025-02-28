@@ -69,8 +69,8 @@ Returns the API documentation.
 - [ ] Search - spelling suggestions
 - [ ] Search - advanced/fielded search
 - [ ] Search - facet alpha and numerical pagination, and search within facets
-- [ ] Item View - citations
-- [ ] Item View - downloads
+- [X] Item View - citations
+- [X] Item View - downloads
 - [ ] Item View - exports (Shapefile, CSV, GeoJSON)
 - [ ] Item View - code previews (Py, R, Leaflet)
 - [ ] Item View - embeds
@@ -80,7 +80,7 @@ Returns the API documentation.
 - [ ] Item View - metadata
 - [ ] Item View - related items (vector metadata search)
 - [ ] Item View - similar images (vector imagery search)
-- [ ] Gazetteer - geonames
-- [ ] Gazetteer - who's on first
+- [ ] Gazetteer - Geonames
+- [ ] Gazetteer - Who's on First
 - [ ] Gazetteer - USGS Geographic Names Information System (GNIS)
 - [ ] GeoJSONs

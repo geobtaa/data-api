@@ -18,22 +18,67 @@ class DownloadOption:
     request_params: Dict
     reflect: bool = False
 
+class IIIFDownloadService:
+    """Service for generating IIIF image download options."""
+    
+    # Standard IIIF image sizes
+    SIZES = {
+        'thumb': {'width': 150, 'height': 150},
+        'small': {'width': 800, 'height': 800},
+        'medium': {'width': 1200, 'height': 1200},
+        'large': {'width': 2000, 'height': 2000}
+    }
+
+    def __init__(self, references: Dict):
+        """Initialize with document references."""
+        self.image_api_endpoint = references.get('http://iiif.io/api/image')
+        self.manifest_url = references.get('http://iiif.io/api/presentation#manifest')
+
+    def get_download_options(self) -> List[Dict]:
+        """Generate download options for IIIF images."""
+        if not self.image_api_endpoint:
+            return []
+
+        # Remove /info.json from endpoint if present
+        base_url = self.image_api_endpoint.replace('/info.json', '')
+        
+        downloads = []
+
+        # Add standard size options
+        for size_name, dimensions in self.SIZES.items():
+            downloads.append({
+                'label': f'{size_name.title()} Image',
+                'url': f'{base_url}/full/{dimensions["width"]},{dimensions["height"]}/0/default.jpg',
+                'type': 'image/jpeg'
+            })
+
+        # Add full size option
+        downloads.append({
+            'label': 'Full Resolution Image',
+            'url': f'{base_url}/full/full/0/default.jpg',
+            'type': 'image/jpeg'
+        })
+
+        return downloads
+
 class DownloadService:
-    """Service for generating download links."""
+    """Service for generating download options for documents."""
 
     def __init__(self, document: Dict):
+        """Initialize with document."""
         self.document = document
         self.wxs_identifier = document.get("gbl_wxsidentifier_s", "")
         self.references = self._parse_references()
 
     def _parse_references(self) -> Dict:
-        """Parse references from the document."""
-        try:
-            if refs := self.document.get("dct_references_s"):
-                return json.loads(refs) if isinstance(refs, str) else refs
-            return {}
-        except json.JSONDecodeError:
-            return {}
+        """Parse references from document."""
+        refs = self.document.get('dct_references_s', {})
+        if isinstance(refs, str):
+            try:
+                return json.loads(refs)
+            except json.JSONDecodeError:
+                return {}
+        return refs
 
     def _get_direct_downloads(self) -> List[Dict]:
         """Get direct download URLs from schema.org references."""
@@ -101,91 +146,20 @@ class DownloadService:
         return f"{url}?{urlencode(option.request_params)}"
 
     def get_download_options(self) -> List[Dict]:
-        """Get all available download options for the document."""
-        options = []
-        
-        # Add direct downloads first
-        options.extend(self._get_direct_downloads())
-        
-        # Add service-based downloads (WFS, WMS, etc.)
-        if self.wxs_identifier:
-            # Shapefile Download Option
-            if self._get_service_url('wfs'):
-                shapefile_params = {
-                    'service': 'wfs',
-                    'version': '2.0.0',
-                    'request': 'GetFeature',
-                    'srsName': 'EPSG:4326',
-                    'outputformat': 'SHAPE-ZIP',
-                    'typeName': self.wxs_identifier
-                }
-                shapefile = DownloadOption(
-                    label="Shapefile",
-                    type="shapefile",
-                    extension="zip",
-                    service_type="wfs",
-                    content_type="application/zip",
-                    request_params=shapefile_params
-                )
-                if url := self._build_download_url(shapefile):
-                    options.append({
-                        "label": shapefile.label,
-                        "url": url,
-                        "type": shapefile.type,
-                        "format": shapefile.extension
-                    })
+        """Get all available download options."""
+        downloads = []
 
-            # GeoJSON Download Option
-            if self._get_service_url('wfs'):
-                geojson_params = {
-                    'service': 'wfs',
-                    'version': '2.0.0',
-                    'request': 'GetFeature',
-                    'srsName': 'EPSG:4326',
-                    'outputformat': 'application/json',
-                    'typeName': self.wxs_identifier
-                }
-                geojson = DownloadOption(
-                    label="GeoJSON",
-                    type="geojson",
-                    extension="json",
-                    service_type="wfs",
-                    content_type="application/json",
-                    request_params=geojson_params
-                )
-                if url := self._build_download_url(geojson):
-                    options.append({
-                        "label": geojson.label,
-                        "url": url,
-                        "type": geojson.type,
-                        "format": geojson.extension
-                    })
+        # Check for IIIF image API
+        if 'http://iiif.io/api/image' in self.references:
+            iiif_service = IIIFDownloadService(self.references)
+            downloads.extend(iiif_service.get_download_options())
 
-            # GeoTIFF Download Option
-            if self._get_service_url('wms'):
-                geotiff_params = {
-                    'service': 'wms',
-                    'version': '1.1.0',
-                    'request': 'GetMap',
-                    'format': 'image/geotiff',
-                    'width': 4096,
-                    'layers': self.wxs_identifier
-                }
-                geotiff = DownloadOption(
-                    label="GeoTIFF",
-                    type="geotiff",
-                    extension="tif",
-                    service_type="wms",
-                    content_type="image/geotiff",
-                    request_params=geotiff_params,
-                    reflect=True
-                )
-                if url := self._build_download_url(geotiff):
-                    options.append({
-                        "label": geotiff.label,
-                        "url": url,
-                        "type": geotiff.type,
-                        "format": geotiff.extension
-                    })
+        # Check for direct download URL
+        if download_url := self.references.get('http://schema.org/downloadUrl'):
+            downloads.append({
+                'label': f'Download {self.document.get("dct_format_s", "File")}',
+                'url': download_url,
+                'type': self.document.get('dct_format_s', 'application/octet-stream').lower()
+            })
 
-        return options 
+        return downloads 
