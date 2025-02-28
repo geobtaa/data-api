@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, BackgroundTasks
 from db.database import database
 from db.models import geoblacklight_development
 from sqlalchemy import select, func
@@ -17,6 +17,7 @@ import time
 from fastapi.responses import JSONResponse, Response
 from .jsonp import JSONPResponse
 from datetime import datetime
+from app.services.download_service import DownloadService
 
 router = APIRouter()
 
@@ -70,6 +71,36 @@ def create_response(content: Dict, callback: Optional[str] = None) -> JSONRespon
     return JSONResponse(content=sanitized_content)
 
 
+def add_ui_attributes(doc: Dict) -> Dict:
+    """Add UI attributes to a document."""
+    # Parse references if needed
+    if isinstance(doc.get("dct_references_s"), str):
+        try:
+            doc["dct_references_s"] = json.loads(doc["dct_references_s"])
+        except json.JSONDecodeError:
+            doc["dct_references_s"] = {}
+
+    # Create services
+    image_service = ImageService(doc)
+    citation_service = CitationService(doc)
+    download_service = DownloadService(doc)
+
+    # Add viewer attributes
+    doc.update(create_viewer_attributes(doc))
+
+    # Add thumbnail URL if available
+    if thumbnail_url := image_service.get_thumbnail_url():
+        doc["ui_thumbnail_url"] = thumbnail_url
+
+    # Add citation
+    doc["ui_citation"] = citation_service.get_citation()
+
+    # Add download options
+    doc["ui_downloads"] = download_service.get_download_options()
+
+    return doc
+
+
 @router.get("/documents/{document_id}")
 async def read_item(
     document_id: str, callback: Optional[str] = Query(None, description="JSONP callback name")
@@ -80,35 +111,19 @@ async def read_item(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Convert Record to dict for easier handling
+    # Convert Record to dict
     doc_dict = dict(document)
 
-    # Add viewer attributes
-    viewer_attributes = create_viewer_attributes(doc_dict)
-
-    # Add thumbnail URL
-    doc_dict = add_thumbnail_url(doc_dict)
-
-    # Add citations
-    doc_dict = add_citations(doc_dict)
+    # Add all UI attributes
+    doc_dict = add_ui_attributes(doc_dict)
 
     json_api_response = {
         "data": {
             "type": "document",
             "id": str(doc_dict["id"]),
             "attributes": {
-                **{
-                    key: (json.loads(value) if key == "dct_references_s" else value)
-                    for key, value in doc_dict.items()
-                    if key != "id"
-                },
-                **viewer_attributes,
-                "ui_citation": doc_dict.get("ui_citation"),
-                "ui_thumbnail_url": doc_dict.get("ui_thumbnail_url"),
-                "ui_viewer_endpoint": viewer_attributes.get("ui_viewer_endpoint"),
-                "ui_viewer_geometry": viewer_attributes.get("ui_viewer_geometry"),
-                "ui_viewer_protocol": viewer_attributes.get("ui_viewer_protocol"),
-            },
+                key: value for key, value in doc_dict.items() if key != "id"
+            }
         }
     }
 
@@ -130,6 +145,11 @@ async def list_documents(
         doc_dict = add_thumbnail_url(doc_dict)
         doc_dict = add_citations(doc_dict)
         viewer_attributes = create_viewer_attributes(doc_dict)
+        
+        # Use DownloadService to get download options
+        download_service = DownloadService(doc_dict)
+        ui_downloads = download_service.get_download_options()
+
         processed_documents.append(
             {
                 "type": "document",
@@ -142,6 +162,7 @@ async def list_documents(
                     "ui_viewer_endpoint": viewer_attributes.get("ui_viewer_endpoint"),
                     "ui_viewer_geometry": viewer_attributes.get("ui_viewer_geometry"),
                     "ui_viewer_protocol": viewer_attributes.get("ui_viewer_protocol"),
+                    "ui_downloads": ui_downloads,  # Include ui_downloads in the response
                 },
             }
         )
