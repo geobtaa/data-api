@@ -48,3 +48,12 @@ geoblacklight_development = Table(
     Column("gbl_suppressed_b", Boolean),
     Column("gbl_georeferenced_b", Boolean),
 )
+
+document_relationships = Table(
+    "document_relationships",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("subject_id", String, nullable=False),
+    Column("predicate", String, nullable=False),
+    Column("object_id", String, nullable=False),
+)

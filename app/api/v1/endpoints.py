@@ -23,6 +23,8 @@ router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
+base_url = os.getenv("APPLICATION_URL", "http://localhost:8000/api/v1/")
+
 
 def add_thumbnail_url(document: Dict) -> Dict:
     """Add the ui_thumbnail_url to the document attributes."""
@@ -101,33 +103,87 @@ def add_ui_attributes(doc: Dict) -> Dict:
     return doc
 
 
-@router.get("/documents/{document_id}")
-async def read_item(
-    document_id: str, callback: Optional[str] = Query(None, description="JSONP callback name")
-):
-    query = geoblacklight_development.select().where(geoblacklight_development.c.id == document_id)
-    document = await database.fetch_one(query)
+async def get_document_relationships(doc_id: str) -> Dict:
+    """Get all relationships for a document."""
+    try:
+        logger.info(f"Fetching relationships for document: {doc_id}")
 
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+        # Get outgoing relationships (where doc is subject)
+        relationships_query = """
+            SELECT predicate, object_id, dct_title_s
+            FROM document_relationships
+            JOIN geoblacklight_development ON geoblacklight_development.id = document_relationships.object_id
+            WHERE subject_id = :doc_id
+            ORDER BY dct_title_s ASC
+        """
+        db_relationships = await database.fetch_all(relationships_query, {"doc_id": doc_id})
+        logger.info(f"Found {len(db_relationships)} relationships")
+        logger.info(f"Relationships: {db_relationships}")
 
-    # Convert Record to dict
-    doc_dict = dict(document)
+        relationships = {}
 
-    # Add all UI attributes
-    doc_dict = add_ui_attributes(doc_dict)
+        # Process outgoing relationships
+        for rel in db_relationships:
+            if rel["predicate"] not in relationships:
+                relationships[rel["predicate"]] = []
+            relationships[rel["predicate"]].append({
+                "doc_id": rel["object_id"],
+                "doc_title": rel["dct_title_s"],
+                "link": f"{base_url}/documents/{rel['object_id']}"
+            })
+            logger.debug(f"Added relationship: {rel['predicate']} -> {rel['object_id']}")
 
-    json_api_response = {
-        "data": {
-            "type": "document",
-            "id": str(doc_dict["id"]),
-            "attributes": {
-                key: value for key, value in doc_dict.items() if key != "id"
+        logger.info(f"Final relationships structure: {relationships}")
+        return relationships
+
+    except Exception as e:
+        logger.error(f"Error getting relationships: {e}", exc_info=True)
+        return {}
+
+
+@router.get("/documents/{id}")
+async def get_document(id: str, callback: Optional[str] = None, include_relationships: bool = True):
+    """Get a single document by ID."""
+    try:
+        # Get document
+        query = geoblacklight_development.select().where(geoblacklight_development.c.id == id)
+        result = await database.fetch_one(query)
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Convert to dict and process
+        doc = dict(result)
+        
+        # Add UI attributes
+        processed_doc = add_ui_attributes(doc)
+        
+        # Get relationships
+        if include_relationships:
+            relationships = await get_document_relationships(id)
+            logger.info(f"Got relationships for {id}: {relationships}")  # Debug line
+        else:
+            relationships = {}
+        
+        # Add relationships to UI attributes
+        processed_doc["ui_relationships"] = relationships
+        
+        # Create response
+        response = {
+                "data": {
+                    "type": "document",
+                    "id": id,
+                    "attributes": processed_doc
+                }
             }
-        }
-    }
-
-    return create_response(json_api_response, callback)
+        
+        logger.info(f"Final response structure: {response}")  # Debug line
+        return create_response(response, callback)
+        
+    except Exception as e:
+        logger.error(f"Document fetch failed: {e}", exc_info=True)
+        error_response = {"message": "Document fetch failed", "error": str(e)}
+        return create_response(error_response, callback)
 
 
 @router.get("/documents/")

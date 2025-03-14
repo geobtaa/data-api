@@ -58,6 +58,8 @@ Returns the API documentation.
 
 ## TODO
 
+X = done; O = in progress
+
 - [X] Docker Image - Published on Docker Hub
 - [X] Search - basic search across all text fields
 - [X] Search - more complex search with filters
@@ -69,8 +71,10 @@ Returns the API documentation.
 - [ ] Search - spelling suggestions
 - [ ] Search - advanced/fielded search
 - [ ] Search - facet alpha and numerical pagination, and search within facets
+- [ ] Search - facet include/exclude
 - [X] Item View - citations
 - [X] Item View - downloads
+- [O] Item View - relations (triplestore)
 - [ ] Item View - exports (Shapefile, CSV, GeoJSON)
 - [ ] Item View - code previews (Py, R, Leaflet)
 - [ ] Item View - embeds
