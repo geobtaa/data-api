@@ -27,7 +27,11 @@ def get_search_criteria(query: str, fq: dict, skip: int, limit: int, sort: list 
 async def search_documents(
     query: str = None, fq: dict = None, skip: int = 0, limit: int = 20, sort: list = None
 ):
-    """Search documents in Elasticsearch with optional filters and sorting."""
+    """Search documents in Elasticsearch with optional filters, sorting, and spelling suggestions."""
+    # Ensure limit is not zero to avoid division by zero errors
+    if limit <= 0:
+        limit = 20  # Default to 20 if limit is zero or negative
+
     index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
 
     try:
@@ -87,6 +91,30 @@ async def search_documents(
                 "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
                 "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
             },
+            "suggest": {
+                "text": query,
+                "simple_phrase": {
+                    "phrase": {
+                        "field": "dct_title_s",
+                        "size": 1,
+                        "gram_size": 3,
+                        "direct_generator": [
+                            {
+                                "field": "dct_title_s",
+                                "suggest_mode": "always"
+                            },
+                            {
+                                "field": "dct_description_sm",
+                                "suggest_mode": "always"
+                            },
+                        ],
+                        "highlight": {
+                            "pre_tag": "<em>",
+                            "post_tag": "</em>"
+                        }
+                    }
+                }
+            }
         }
 
         logger.debug(f"ES Query: {json.dumps(search_query, indent=2)}")
@@ -174,13 +202,26 @@ def get_sort_options(search_criteria):
 
 
 async def process_search_response(response, limit, skip, search_criteria):
-    """Process Elasticsearch response and fetch documents from PostgreSQL."""
+    """Process Elasticsearch response and format for API output."""
     try:
         total_hits = response.body["hits"]["total"]["value"]
         logger.debug(f"Total hits: {total_hits}")
 
         document_ids = [hit["_source"]["id"] for hit in response.body["hits"]["hits"]]
         logger.debug(f"Found document IDs: {document_ids}")
+
+        # Process spelling suggestions
+        suggestions = []
+        if "suggest" in response.body:
+            simple_phrase = response.body["suggest"].get("simple_phrase", [])
+            for suggestion in simple_phrase:
+                if suggestion.get("options"):
+                    for option in suggestion["options"]:
+                        suggestions.append({
+                            "text": option.get("text"),
+                            "highlighted": option.get("highlighted"),
+                            "score": option.get("score")
+                        })
 
         if not document_ids:
             logger.debug("No documents found")
@@ -201,7 +242,8 @@ async def process_search_response(response, limit, skip, search_criteria):
                         "total_count": total_hits,
                         "first_page?": True,
                         "last_page?": True,
-                    }
+                    },
+                    "suggestions": suggestions  # Add suggestions to meta
                 },
                 "data": [],
                 "included": [],
@@ -258,13 +300,14 @@ async def process_search_response(response, limit, skip, search_criteria):
                     "current_page": (skip // limit) + 1,
                     "next_page": ((skip // limit) + 2) if (skip + limit) < total_hits else None,
                     "prev_page": ((skip // limit)) if skip > 0 else None,
-                    "total_pages": (total_hits // limit) + (1 if total_hits % limit > 0 else 0),
+                    "total_pages": (total_hits // limit) + (1 if total_hits % limit > 0 else 0) if limit > 0 else 0,
                     "limit_value": limit,
                     "offset_value": skip,
                     "total_count": total_hits,
                     "first_page?": (skip == 0),
                     "last_page?": (skip + limit) >= total_hits,
-                }
+                },
+                "suggestions": suggestions  # Add suggestions to meta
             },
             "data": processed_documents,
             "included": included,
