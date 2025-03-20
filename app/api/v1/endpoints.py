@@ -12,6 +12,7 @@ import os
 from ...elasticsearch.client import es
 from ...services.image_service import ImageService
 from ...services.citation_service import CitationService
+from ...services.cache_service import cached_endpoint, CacheService, ENDPOINT_CACHE, invalidate_cache_with_prefix
 import logging
 import time
 from fastapi.responses import JSONResponse, Response
@@ -24,6 +25,12 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 base_url = os.getenv("APPLICATION_URL", "http://localhost:8000/api/v1/")
+
+# Cache TTL configuration in seconds
+DOCUMENT_CACHE_TTL = int(os.getenv("DOCUMENT_CACHE_TTL", 86400))  # 24 hours
+SEARCH_CACHE_TTL = int(os.getenv("SEARCH_CACHE_TTL", 3600))  # 1 hour
+SUGGEST_CACHE_TTL = int(os.getenv("SUGGEST_CACHE_TTL", 7200))  # 2 hours
+LIST_CACHE_TTL = int(os.getenv("LIST_CACHE_TTL", 43200))  # 12 hours
 
 
 def add_thumbnail_url(document: Dict) -> Dict:
@@ -142,6 +149,7 @@ async def get_document_relationships(doc_id: str) -> Dict:
 
 
 @router.get("/documents/{id}")
+@cached_endpoint(ttl=DOCUMENT_CACHE_TTL)
 async def get_document(id: str, callback: Optional[str] = None, include_relationships: bool = True):
     """Get a single document by ID."""
     try:
@@ -187,6 +195,7 @@ async def get_document(id: str, callback: Optional[str] = None, include_relation
 
 
 @router.get("/documents/")
+@cached_endpoint(ttl=LIST_CACHE_TTL)
 async def list_documents(
     skip: int = 0,
     limit: int = 10,
@@ -231,11 +240,18 @@ async def index_to_elasticsearch(
     callback: Optional[str] = Query(None, description="JSONP callback name")
 ):
     """Index all documents from PostgreSQL to Elasticsearch."""
+    # When indexing, invalidate all search and suggest caches
+    if ENDPOINT_CACHE:
+        logger.info("Invalidating search and suggest caches")
+        await invalidate_cache_with_prefix("app.api.v1.endpoints:search")
+        await invalidate_cache_with_prefix("app.api.v1.endpoints:suggest")
+    
     result = await index_documents()
     return create_response(result, callback)
 
 
 @router.get("/search")
+@cached_endpoint(ttl=SEARCH_CACHE_TTL)
 async def search(
     request: Request,
     q: Optional[str] = Query(None, description="Search query"),
@@ -244,9 +260,16 @@ async def search(
     sort: SortOption = Query(SortOption.RELEVANCE, description="Sort order"),
     callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
-    """Search endpoint."""
+    """Search endpoint with caching support."""
     try:
         timings = {}
+        cache_status = "miss"  # Default to cache miss for timing info
+        
+        if ENDPOINT_CACHE:
+            timings["cache"] = "enabled"
+        else:
+            timings["cache"] = "disabled"
+        
         start_time = time.time()
 
         # Calculate skip from page/limit
@@ -367,13 +390,14 @@ def extract_filter_queries(params: Dict) -> Dict:
 
 
 @router.get("/suggest")
+@cached_endpoint(ttl=SUGGEST_CACHE_TTL)
 async def suggest(
     q: str = Query(..., description="Query string for suggestions"),
     resource_class: Optional[str] = Query(None, description="Filter suggestions by resource class"),
     size: int = Query(5, ge=1, le=20, description="Number of suggestions to return"),
     callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
-    """Get autocomplete suggestions."""
+    """Get autocomplete suggestions with caching support."""
     try:
         # Simplified query without contexts first
         suggest_query = {
@@ -449,6 +473,36 @@ async def suggest(
         # print(f"Suggestion error: {e}")
         error_response = {"detail": f"Suggestion error: {str(e)}\nQuery: {suggest_query}"}
         return create_response(error_response, callback)
+
+
+@router.get("/cache/clear")
+async def clear_cache(cache_type: Optional[str] = Query(None, description="Type of cache to clear (search, document, suggest, all)")):
+    """Clear specified cache or all cache if not specified."""
+    if not ENDPOINT_CACHE:
+        return JSONResponse(content={"message": "Caching is disabled. Set ENDPOINT_CACHE=true to enable."})
+    
+    try:
+        cache_service = CacheService()
+        
+        if cache_type == "search" or cache_type is None:
+            await invalidate_cache_with_prefix("app.api.v1.endpoints:search")
+        
+        if cache_type == "document" or cache_type is None:
+            await invalidate_cache_with_prefix("app.api.v1.endpoints:get_document")
+        
+        if cache_type == "suggest" or cache_type is None:
+            await invalidate_cache_with_prefix("app.api.v1.endpoints:suggest")
+        
+        if cache_type == "all" or cache_type is None:
+            await cache_service.flush_all()
+        
+        return JSONResponse(content={"message": f"Cache cleared successfully: {cache_type or 'all'}"})
+    except Exception as e:
+        logger.error(f"Error clearing cache: {str(e)}")
+        return JSONResponse(
+            content={"error": f"Failed to clear cache: {str(e)}"},
+            status_code=500
+        )
 
 
 async def perform_bulk_indexing(bulk_data, index_name, bulk_size=100):

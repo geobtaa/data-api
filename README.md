@@ -20,6 +20,7 @@ Run the Docker containers:
 
 * [ParadeDB](https://www.paradedb.com/)
 * [Elasticsearch](https://www.elastic.co/elasticsearch/)
+* [Redis](https://redis.io/) (for caching)
 
 ```bash
 docker compose up -d
@@ -56,26 +57,67 @@ This will start the API server on port 8000.
 
 Returns the API documentation.
 
+## Caching
+
+The API supports aggressive Redis-based caching to improve performance. Caching can be controlled through environment variables:
+
+```
+# Enable/disable caching
+ENDPOINT_CACHE=true
+
+# Redis connection settings
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=optional_password
+REDIS_DB=0
+
+# Cache TTL settings (in seconds)
+DOCUMENT_CACHE_TTL=86400  # 24 hours
+SEARCH_CACHE_TTL=3600     # 1 hour
+SUGGEST_CACHE_TTL=7200    # 2 hours 
+LIST_CACHE_TTL=43200      # 12 hours
+CACHE_TTL=43200           # Default TTL (12 hours)
+```
+
+When caching is enabled:
+- API responses are cached in Redis based on the endpoint and its parameters
+- Search results are cached for faster repeated queries
+- Document details are cached to reduce database load
+- Suggestions are cached to improve autocomplete performance
+
+The cache is automatically invalidated when:
+- Documents are created, updated, or deleted
+- The Elasticsearch index is rebuilt
+
+You can manually clear the cache using:
+```
+GET /api/v1/cache/clear?cache_type=search|document|suggest|all
+```
+
 ## TODO
 
 X = done; O = in progress
 
 - [X] Docker Image - Published on Docker Hub
 - [X] Search - basic search across all text fields
+- [X] Search - autocomplete
+- [X] Search - spelling suggestions
 - [X] Search - more complex search with filters
 - [X] Search - pagination
-- [X] Search - faceting
 - [X] Search - sorting
-- [X] Search - autocomplete
-- [X] Search - thumbnail images (needs improvements)
-- [ ] Search - spelling suggestions
-- [ ] Search - advanced/fielded search
-- [ ] Search - facet alpha and numerical pagination, and search within facets
+- [X] Search - basic faceting
+- [X] Performance - Redis caching
 - [ ] Search - facet include/exclude
+- [ ] Search - facet alpha and numerical pagination, and search within facets
+- [ ] Search - advanced/fielded search
+- [ ] Search - spatial search
+- [X] Search Results - thumbnail images (needs improvements)
+- [X] Search Results - bookmarked items
 - [X] Item View - citations
 - [X] Item View - downloads
 - [O] Item View - relations (triplestore)
 - [ ] Item View - exports (Shapefile, CSV, GeoJSON)
+- [ ] Item View - export conversions (Shapefile to: GeoJSON, CSV, TSV, etc)
 - [ ] Item View - code previews (Py, R, Leaflet)
 - [ ] Item View - embeds
 - [ ] Item View - allmaps integration
