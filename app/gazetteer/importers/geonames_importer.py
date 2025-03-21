@@ -25,6 +25,11 @@ class GeonamesImporter(BaseImporter):
         'dem', 'timezone', 'modification_date'
     ]
     
+    # Smaller chunk size for GeoNames to avoid exceeding PostgreSQL parameter limits
+    # Each record has 19 fields + 2 for created_at/updated_at, so 21 params per record
+    # 32767 / 21 ≈ 1560, using 1500 to be safe
+    CHUNK_SIZE = 1500
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.data_directory = kwargs.get('data_directory') or self.DATA_DIR
@@ -72,21 +77,37 @@ class GeonamesImporter(BaseImporter):
         
         return record
     
+    def find_text_files(self) -> List[str]:
+        """Find text files (.txt) in the specified directory."""
+        if not os.path.exists(self.data_directory):
+            self.logger.error(f"Data directory does not exist: {self.data_directory}")
+            return []
+        
+        txt_files = []
+        for root, _, files in os.walk(self.data_directory):
+            for file in files:
+                if file.lower().endswith('.txt'):
+                    txt_files.append(os.path.join(root, file))
+        
+        self.txt_files = txt_files
+        self.logger.info(f"Found {len(txt_files)} text files")
+        return txt_files
+    
     async def import_data(self) -> Dict[str, Any]:
         """
-        Import GeoNames data from CSV files to the database.
+        Import GeoNames data from txt files to the database.
         
         Returns:
             Dictionary with import statistics.
         """
         start_time = datetime.now()
-        self.find_csv_files()
+        self.txt_files = self.find_text_files()
         
-        if not self.csv_files:
-            self.logger.error(f"No CSV files found in {self.data_directory}")
+        if not self.txt_files:
+            self.logger.error(f"No text files (.txt) found in {self.data_directory}")
             return {
                 "status": "error",
-                "message": f"No CSV files found in {self.data_directory}",
+                "message": f"No text files (.txt) found in {self.data_directory}",
                 "elapsed_time": (datetime.now() - start_time).total_seconds()
             }
         
@@ -95,40 +116,59 @@ class GeonamesImporter(BaseImporter):
         
         total_processed = 0
         
-        for csv_file in self.csv_files:
-            self.logger.info(f"Processing file: {csv_file}")
+        for txt_file in self.txt_files:
+            file_start_time = datetime.now()
+            self.logger.info(f"Processing file: {txt_file}")
             
-            # Read and process the CSV file
+            # Read and process the TXT file
             # GeoNames files are tab-delimited
-            records = self.read_csv(csv_file, delimiter='\t', fieldnames=self.FIELDNAMES)
+            records = self.read_csv(txt_file, delimiter='\t', fieldnames=self.FIELDNAMES)
             
             if not records:
-                self.logger.warning(f"No records found in {csv_file}")
+                self.logger.warning(f"No records found in {txt_file}")
                 continue
             
-            self.logger.info(f"Found {len(records)} records in {csv_file}")
+            total_records = len(records)
+            self.logger.info(f"Found {total_records} records in {txt_file}")
             
             # Clean the records
+            self.logger.info("Cleaning records...")
             cleaned_records = [self.clean_record(record) for record in records]
             
-            # Bulk insert the records
-            inserted = await self.bulk_insert(self.table, cleaned_records)
+            # Bulk insert the records with progress reporting
+            self.logger.info(f"Inserting records using chunk size of {self.CHUNK_SIZE}...")
+            chunks = self.chunk_data(cleaned_records, self.CHUNK_SIZE)
+            total_chunks = len(chunks)
             
-            self.logger.info(f"Inserted {inserted} records from {csv_file}")
+            inserted = 0
+            for i, chunk in enumerate(chunks):
+                if i > 0 and i % 10 == 0:  # Log progress every 10 chunks
+                    elapsed = (datetime.now() - file_start_time).total_seconds()
+                    progress = (i / total_chunks) * 100
+                    records_per_sec = inserted / elapsed if elapsed > 0 else 0
+                    self.logger.info(f"Progress: {progress:.1f}% - Inserted {inserted:,} of {total_records:,} records ({records_per_sec:.1f} records/sec)")
+                
+                chunk_inserted = await self.bulk_insert(self.table, chunk)
+                inserted += chunk_inserted
+            
+            file_elapsed_time = (datetime.now() - file_start_time).total_seconds()
+            records_per_second = inserted / file_elapsed_time if file_elapsed_time > 0 else 0
+            
+            self.logger.info(f"Inserted {inserted:,} records from {txt_file} in {file_elapsed_time:.2f} seconds ({records_per_second:.1f} records/sec)")
             total_processed += inserted
         
         elapsed_time = (datetime.now() - start_time).total_seconds()
         
         result = {
             "status": "success" if not self.errors else "partial_success",
-            "files_processed": len(self.csv_files),
+            "files_processed": len(self.txt_files),
             "records_processed": total_processed,
             "errors": self.errors,
             "elapsed_time": elapsed_time,
             "records_per_second": total_processed / elapsed_time if elapsed_time > 0 else 0
         }
         
-        self.logger.info(f"Import completed. {total_processed} records processed in {elapsed_time:.2f} seconds")
+        self.logger.info(f"Import completed. {total_processed:,} records processed in {elapsed_time:.2f} seconds ({result['records_per_second']:.1f} records/sec)")
         
         return result
 

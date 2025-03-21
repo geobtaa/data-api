@@ -163,3 +163,4 @@ cython_debug/
 
 # Gazetteer data
 data/gazetteers/**/*.csv
+data/gazetteers/**/*.txt

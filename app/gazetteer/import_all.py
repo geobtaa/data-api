@@ -3,6 +3,9 @@
 Import all gazetteer data.
 
 This script runs all the gazetteer importers in sequence.
+- GeoNames: Imports data from tab-delimited .txt files
+- WOF: Imports data from .csv files
+- BTAA: Imports data from .csv files 
 """
 
 import asyncio
@@ -33,6 +36,18 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Log the database URL (without password)
+db_url = os.getenv("DATABASE_URL", "")
+if db_url:
+    # Mask password if present
+    masked_url = db_url
+    if "@" in db_url and ":" in db_url:
+        parts = db_url.split("@")
+        auth = parts[0].split(":")
+        if len(auth) > 2:  # postgresql://user:pass@host
+            masked_url = f"{auth[0]}:{auth[1]}:****@{parts[1]}"
+    print(f"Using database URL: {masked_url}")
+
 async def import_all(gazetteer_types: List[str] = None, data_dir: Optional[str] = None) -> Dict[str, Any]:
     """
     Run all gazetteer importers.
@@ -61,6 +76,7 @@ async def import_all(gazetteer_types: List[str] = None, data_dir: Optional[str] 
         if gazetteer_type == 'geonames':
             importer_dir = os.path.join(data_dir, 'geonames') if data_dir else None
             importer = GeonamesImporter(data_directory=importer_dir)
+            logger.info(f"GeoNames importer will look for .txt files in {importer.data_directory}")
         elif gazetteer_type == 'wof':
             importer_dir = os.path.join(data_dir, 'wof') if data_dir else None
             importer = WofImporter(data_directory=importer_dir)

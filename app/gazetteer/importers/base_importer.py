@@ -1,7 +1,7 @@
 import os
 import csv
 import logging
-from sqlalchemy import create_engine, insert, delete
+from sqlalchemy import create_engine, insert, delete, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime
 from pathlib import Path
@@ -179,7 +179,9 @@ class BaseImporter:
                         raise e
             
             async with get_session() as session:
-                await session.execute(f"TRUNCATE TABLE {table_name} RESTART IDENTITY CASCADE")
+                # Use text() to properly format the SQL statement
+                sql = text(f"TRUNCATE TABLE {table_name} RESTART IDENTITY CASCADE")
+                await session.execute(sql)
             
             self.logger.info(f"Truncated table: {table_name}")
             return True
