@@ -16,11 +16,23 @@ class BtaaImporter(BaseImporter):
     DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 
                            'data', 'gazetteers', 'btaa')
     
-    # BTAA fieldnames
-    FIELDNAMES = [
-        'fast_area', 'bounding_box', 'geometry', 'geonames_id', 'state_abbv',
-        'state_name', 'county_fips', 'statefp', 'namelsad'
-    ]
+    # Map CSV column names to database field names
+    FIELD_MAPPING = {
+        'Fast': 'fast_area',
+        'Bounding Box': 'bounding_box',
+        'Geometry': 'geometry',
+        'GeoNames ID': 'geonames_id',
+        'State Abbv': 'state_abbv',
+        'State Name': 'state_name',
+        'County_FIPS': 'county_fips',
+        'STATEFP': 'statefp',
+        'NAMELSAD': 'namelsad'
+    }
+    
+    # Smaller chunk size to avoid PostgreSQL parameter limits (similar to GeoNames)
+    # The BTAA table has 9 fields + 2 for created_at/updated_at, so 11 params per record
+    # 32767 / 11 ≈ 2979, using 2000 to be safe
+    CHUNK_SIZE = 2000
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -38,18 +50,20 @@ class BtaaImporter(BaseImporter):
         Returns:
             Cleaned record ready for database insertion.
         """
+        # Rename fields based on the mapping
+        cleaned_record = {}
+        for csv_field, db_field in self.FIELD_MAPPING.items():
+            if csv_field in record:
+                cleaned_record[db_field] = record[csv_field]
+        
         # Call the parent method to handle common cleaning
-        record = super().clean_record(record)
+        cleaned_record = super().clean_record(cleaned_record)
         
-        # Ensure state_abbv is uppercase
-        if record.get('state_abbv'):
-            record['state_abbv'] = record['state_abbv'].upper()
-            
-            # Validate state_abbv (2 character limit)
-            if len(record['state_abbv']) > 2:
-                record['state_abbv'] = record['state_abbv'][:2]
+        # Handle required fields
+        if not cleaned_record.get('fast_area'):
+            cleaned_record['fast_area'] = 'Unknown'
         
-        return record
+        return cleaned_record
     
     async def import_data(self) -> Dict[str, Any]:
         """
@@ -75,24 +89,50 @@ class BtaaImporter(BaseImporter):
         total_processed = 0
         
         for csv_file in self.csv_files:
+            file_start_time = datetime.now()
             self.logger.info(f"Processing file: {csv_file}")
             
             # Read and process the CSV file
-            records = self.read_csv(csv_file, delimiter=',')
+            # Don't provide fieldnames - we'll use the header row
+            records = self.read_csv(csv_file)
             
             if not records:
                 self.logger.warning(f"No records found in {csv_file}")
                 continue
             
-            self.logger.info(f"Found {len(records)} records in {csv_file}")
+            total_records = len(records)
+            self.logger.info(f"Found {total_records} records in {csv_file}")
             
             # Clean the records
-            cleaned_records = [self.clean_record(record) for record in records]
+            self.logger.info("Cleaning records...")
+            cleaned_records = []
+            for record in records:
+                cleaned_record = self.clean_record(record)
+                if cleaned_record is not None:
+                    cleaned_records.append(cleaned_record)
             
-            # Bulk insert the records
-            inserted = await self.bulk_insert(self.table, cleaned_records)
+            self.logger.info(f"Cleaned {len(cleaned_records)} records")
             
-            self.logger.info(f"Inserted {inserted} records from {csv_file}")
+            # Bulk insert the records with progress reporting
+            self.logger.info(f"Inserting records using chunk size of {self.CHUNK_SIZE}...")
+            chunks = self.chunk_data(cleaned_records, self.CHUNK_SIZE)
+            total_chunks = len(chunks)
+            
+            inserted = 0
+            for i, chunk in enumerate(chunks):
+                if i > 0 and i % 5 == 0:  # Log progress every 5 chunks
+                    elapsed = (datetime.now() - file_start_time).total_seconds()
+                    progress = (i / total_chunks) * 100
+                    records_per_sec = inserted / elapsed if elapsed > 0 else 0
+                    self.logger.info(f"Progress: {progress:.1f}% - Inserted {inserted:,} of {len(cleaned_records):,} records ({records_per_sec:.1f} records/sec)")
+                
+                chunk_inserted = await self.bulk_insert(self.table, chunk)
+                inserted += chunk_inserted
+            
+            file_elapsed_time = (datetime.now() - file_start_time).total_seconds()
+            records_per_second = inserted / file_elapsed_time if file_elapsed_time > 0 else 0
+            
+            self.logger.info(f"Inserted {inserted:,} records from {csv_file} in {file_elapsed_time:.2f} seconds ({records_per_second:.1f} records/sec)")
             total_processed += inserted
         
         elapsed_time = (datetime.now() - start_time).total_seconds()
@@ -106,7 +146,7 @@ class BtaaImporter(BaseImporter):
             "records_per_second": total_processed / elapsed_time if elapsed_time > 0 else 0
         }
         
-        self.logger.info(f"Import completed. {total_processed} records processed in {elapsed_time:.2f} seconds")
+        self.logger.info(f"Import completed. {total_processed:,} records processed in {elapsed_time:.2f} seconds ({result['records_per_second']:.1f} records/sec)")
         
         return result
 
@@ -119,4 +159,4 @@ if __name__ == "__main__":
         result = await importer.import_data()
         print(result)
     
-    asyncio.run(run_import()) 
+    asyncio.run(run_import())

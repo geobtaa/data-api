@@ -49,6 +49,28 @@ class GeonamesImporter(BaseImporter):
         # Call the parent method to handle common cleaning
         record = super().clean_record(record)
         
+        # Handle required fields with null values
+        # For asciiname, use the name field if asciiname is null
+        if record.get('asciiname') is None or record.get('asciiname') == '':
+            if record.get('name'):
+                record['asciiname'] = record['name']
+            else:
+                record['asciiname'] = 'Unknown'  # Fallback default
+                
+        # For name, use asciiname or a default if null
+        if record.get('name') is None or record.get('name') == '':
+            if record.get('asciiname'):
+                record['name'] = record['asciiname']
+            else:
+                record['name'] = 'Unknown'  # Fallback default
+                
+        # Ensure latitude and longitude are present (required fields)
+        if record.get('latitude') is None or record.get('latitude') == '':
+            record['latitude'] = 0.0  # Default to 0,0 coordinates
+            
+        if record.get('longitude') is None or record.get('longitude') == '':
+            record['longitude'] = 0.0  # Default to 0,0 coordinates
+        
         # Convert numeric fields
         try:
             # Integer conversions
@@ -63,7 +85,8 @@ class GeonamesImporter(BaseImporter):
                 if record.get(decimal_field) and record[decimal_field] not in ['', None]:
                     record[decimal_field] = float(record[decimal_field])
                 else:
-                    record[decimal_field] = None
+                    # Use defaults for required fields
+                    record[decimal_field] = 0.0
             
             # Date conversion
             if record.get('modification_date') and record['modification_date'] not in ['', None]:
@@ -71,7 +94,13 @@ class GeonamesImporter(BaseImporter):
                 record['modification_date'] = datetime.strptime(record['modification_date'], '%Y-%m-%d').date()
             else:
                 record['modification_date'] = None
-        
+                
+            # Ensure geonameid exists and is valid (primary key requirement)
+            if record.get('geonameid') is None:
+                # Skip this record to avoid primary key issues
+                self.logger.warning("Skipping record with null geonameid")
+                return None
+                
         except (ValueError, TypeError) as e:
             self.logger.warning(f"Error converting field in record {record.get('geonameid')}: {e}")
         
@@ -115,6 +144,7 @@ class GeonamesImporter(BaseImporter):
         await self.truncate_table(self.table_name)
         
         total_processed = 0
+        skipped_records = 0
         
         for txt_file in self.txt_files:
             file_start_time = datetime.now()
@@ -133,7 +163,15 @@ class GeonamesImporter(BaseImporter):
             
             # Clean the records
             self.logger.info("Cleaning records...")
-            cleaned_records = [self.clean_record(record) for record in records]
+            cleaned_records = []
+            for record in records:
+                cleaned_record = self.clean_record(record)
+                if cleaned_record is not None:
+                    cleaned_records.append(cleaned_record)
+                else:
+                    skipped_records += 1
+            
+            self.logger.info(f"Cleaned {len(cleaned_records)} records, skipped {skipped_records} invalid records")
             
             # Bulk insert the records with progress reporting
             self.logger.info(f"Inserting records using chunk size of {self.CHUNK_SIZE}...")
@@ -146,7 +184,7 @@ class GeonamesImporter(BaseImporter):
                     elapsed = (datetime.now() - file_start_time).total_seconds()
                     progress = (i / total_chunks) * 100
                     records_per_sec = inserted / elapsed if elapsed > 0 else 0
-                    self.logger.info(f"Progress: {progress:.1f}% - Inserted {inserted:,} of {total_records:,} records ({records_per_sec:.1f} records/sec)")
+                    self.logger.info(f"Progress: {progress:.1f}% - Inserted {inserted:,} of {len(cleaned_records):,} records ({records_per_sec:.1f} records/sec)")
                 
                 chunk_inserted = await self.bulk_insert(self.table, chunk)
                 inserted += chunk_inserted
@@ -163,12 +201,13 @@ class GeonamesImporter(BaseImporter):
             "status": "success" if not self.errors else "partial_success",
             "files_processed": len(self.txt_files),
             "records_processed": total_processed,
+            "records_skipped": skipped_records,
             "errors": self.errors,
             "elapsed_time": elapsed_time,
             "records_per_second": total_processed / elapsed_time if elapsed_time > 0 else 0
         }
         
-        self.logger.info(f"Import completed. {total_processed:,} records processed in {elapsed_time:.2f} seconds ({result['records_per_second']:.1f} records/sec)")
+        self.logger.info(f"Import completed. {total_processed:,} records processed, {skipped_records} records skipped in {elapsed_time:.2f} seconds ({result['records_per_second']:.1f} records/sec)")
         
         return result
 

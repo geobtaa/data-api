@@ -80,6 +80,12 @@ async def import_all(gazetteer_types: List[str] = None, data_dir: Optional[str] 
         elif gazetteer_type == 'wof':
             importer_dir = os.path.join(data_dir, 'wof') if data_dir else None
             importer = WofImporter(data_directory=importer_dir)
+            logger.info(f"WOF importer will look for specific CSV files in {importer.data_directory}:")
+            logger.info("  - spr.csv: Main WOF spatial records")
+            logger.info("  - ancestors.csv: Ancestor relationships")
+            logger.info("  - concordances.csv: Concordances to other systems")
+            logger.info("  - geojson.csv: GeoJSON data (if available)")
+            logger.info("  - names.csv: Alternative names")
         elif gazetteer_type == 'btaa':
             importer_dir = os.path.join(data_dir, 'btaa') if data_dir else None
             importer = BtaaImporter(data_directory=importer_dir)
