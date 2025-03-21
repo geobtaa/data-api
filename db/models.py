@@ -1,4 +1,4 @@
-from sqlalchemy import Table, Column, String, Text, ARRAY, Boolean, TIMESTAMP, MetaData, Integer
+from sqlalchemy import Table, Column, String, Text, ARRAY, Boolean, TIMESTAMP, MetaData, Integer, BigInteger, Numeric, Date
 
 metadata = MetaData()
 
@@ -56,4 +56,139 @@ document_relationships = Table(
     Column("subject_id", String, nullable=False),
     Column("predicate", String, nullable=False),
     Column("object_id", String, nullable=False),
+)
+
+# Gazetteer Models
+
+# GeoNames gazetteer
+gazetteer_geonames = Table(
+    "gazetteer_geonames",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("geonameid", BigInteger, nullable=False, unique=True, index=True),
+    Column("name", String, nullable=False),
+    Column("asciiname", String, nullable=False),
+    Column("alternatenames", Text),
+    Column("latitude", Numeric(10, 7), nullable=False),
+    Column("longitude", Numeric(10, 7), nullable=False),
+    Column("feature_class", String(1)),
+    Column("feature_code", String(10)),
+    Column("country_code", String(2)),
+    Column("cc2", String(200)),
+    Column("admin1_code", String(20)),
+    Column("admin2_code", String(80)),
+    Column("admin3_code", String(20)),
+    Column("admin4_code", String(20)),
+    Column("population", BigInteger),
+    Column("elevation", Integer),
+    Column("dem", Integer),
+    Column("timezone", String(40)),
+    Column("modification_date", Date),
+    Column("created_at", TIMESTAMP),
+    Column("updated_at", TIMESTAMP),
+)
+
+# Who's on First gazetteer tables
+gazetteer_wof_spr = Table(
+    "gazetteer_wof_spr",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("wok_id", BigInteger, nullable=False, unique=True, index=True),
+    Column("parent_id", BigInteger),
+    Column("name", String, nullable=False),
+    Column("placetype", String),
+    Column("country", String(2)),
+    Column("repo", String),
+    Column("latitude", Numeric(10, 7)),
+    Column("longitude", Numeric(10, 7)),
+    Column("min_latitude", Numeric(10, 7)),
+    Column("min_longitude", Numeric(10, 7)),
+    Column("max_latitude", Numeric(10, 7)),
+    Column("max_longitude", Numeric(10, 7)),
+    Column("is_current", Integer),
+    Column("is_deprecated", Integer),
+    Column("is_ceased", Integer),
+    Column("is_superseded", Integer),
+    Column("is_superseding", Integer),
+    Column("superseded_by", Integer),
+    Column("supersedes", Integer),
+    Column("lastmodified", Integer),
+    Column("created_at", TIMESTAMP),
+    Column("updated_at", TIMESTAMP),
+)
+
+gazetteer_wof_ancestors = Table(
+    "gazetteer_wof_ancestors",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("wok_id", BigInteger, nullable=False, index=True),
+    Column("ancestor_id", Integer, nullable=False),
+    Column("ancestor_placetype", String),
+    Column("lastmodified", Integer),
+    Column("created_at", TIMESTAMP),
+    Column("updated_at", TIMESTAMP),
+)
+
+gazetteer_wof_concordances = Table(
+    "gazetteer_wof_concordances",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("wok_id", BigInteger, nullable=False, index=True),
+    Column("other_id", String, nullable=False),
+    Column("other_source", String, nullable=False),
+    Column("lastmodified", Integer),
+    Column("created_at", TIMESTAMP),
+    Column("updated_at", TIMESTAMP),
+)
+
+gazetteer_wof_geojson = Table(
+    "gazetteer_wof_geojson",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("wok_id", BigInteger, nullable=False, index=True),
+    Column("body", Text, nullable=False),
+    Column("source", String),
+    Column("alt_label", String),
+    Column("is_alt", Boolean),
+    Column("lastmodified", Integer),
+    Column("created_at", TIMESTAMP),
+    Column("updated_at", TIMESTAMP),
+)
+
+gazetteer_wof_names = Table(
+    "gazetteer_wof_names",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("wok_id", BigInteger, nullable=False, index=True),
+    Column("placetype", String),
+    Column("country", String(2)),
+    Column("language", String),
+    Column("extlang", String),
+    Column("script", String),
+    Column("region", String),
+    Column("variant", String),
+    Column("extension", String),
+    Column("privateuse", String),
+    Column("name", String, nullable=False),
+    Column("lastmodified", Integer),
+    Column("created_at", TIMESTAMP),
+    Column("updated_at", TIMESTAMP),
+)
+
+# BTAA gazetteer
+gazetteer_btaa = Table(
+    "gazetteer_btaa",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("fast_area", String, nullable=False, index=True),
+    Column("bounding_box", String),
+    Column("geometry", Text),
+    Column("geonames_id", String),
+    Column("state_abbv", String(2), index=True),
+    Column("state_name", String),
+    Column("county_fips", String, index=True),
+    Column("statefp", String),
+    Column("namelsad", String),
+    Column("created_at", TIMESTAMP),
+    Column("updated_at", TIMESTAMP),
 )

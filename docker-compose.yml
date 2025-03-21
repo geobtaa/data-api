@@ -16,6 +16,8 @@ services:
       - REDIS_PORT=6379
       - REDIS_TTL=604800  # 7 days in seconds
       - LOG_LEVEL=DEBUG
+      - ENDPOINT_CACHE=true  # Enable endpoint caching
+      - GAZETTEER_CACHE_TTL=3600  # 1 hour in seconds
     ports:
       - "8000:8000"
     depends_on:
