@@ -22,16 +22,23 @@ Arguments:
 
 import os
 import sys
-import argparse
 import requests
 import sqlite3
 import csv
 import bz2
 import logging
-from datetime import datetime
+import argparse
 from pathlib import Path
+from datetime import datetime
 
-from .base_downloader import BaseDownloader
+# Fix imports to work both as a module and as a direct script
+try:
+    # When run as a module
+    from .base_downloader import BaseDownloader
+except ImportError:
+    # When run directly
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
+    from app.gazetteer.downloaders.base_downloader import BaseDownloader
 
 # Setup logging
 logger = logging.getLogger("wof_downloader")
@@ -148,49 +155,14 @@ class WofDownloader(BaseDownloader):
         except Exception as e:
             logger.error(f"Error exporting to CSV: {e}")
     
-    def run(self, download=False, export=False, all=False):
+    def export(self):
         """
-        Run the downloader operations based on provided options.
+        Export WOF data from SQLite database to CSV files.
         
-        Args:
-            download: Whether to download and extract the database.
-            export: Whether to export tables to CSV.
-            all: Whether to perform all operations.
+        This method fulfills the BaseDownloader abstract method requirement
+        by calling the existing export_to_csv method.
         """
-        self.start_time = datetime.now()
-        
-        try:
-            if all or download:
-                self.download()
-            
-            if all or export:
-                self.export_to_csv()
-            
-            self.end_time = datetime.now()
-            elapsed_time = (self.end_time - self.start_time).total_seconds()
-            logger.info(f"All operations completed in {elapsed_time:.2f} seconds.")
-            
-            return {
-                "status": "success",
-                "gazetteer": self.gazetteer_name,
-                "elapsed_time": elapsed_time
-            }
-        
-        except KeyboardInterrupt:
-            logger.info("Operation interrupted by user.")
-            return {
-                "status": "interrupted",
-                "gazetteer": self.gazetteer_name,
-                "elapsed_time": (datetime.now() - self.start_time).total_seconds()
-            }
-        except Exception as e:
-            logger.error(f"Unexpected error: {e}")
-            return {
-                "status": "error",
-                "gazetteer": self.gazetteer_name,
-                "error": str(e),
-                "elapsed_time": (datetime.now() - self.start_time).total_seconds()
-            }
+        return self.export_to_csv()
 
 def main():
     """Parse command line arguments and run the downloader."""

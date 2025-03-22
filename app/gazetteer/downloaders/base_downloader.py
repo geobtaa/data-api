@@ -6,12 +6,18 @@ This module provides a base class for gazetteer data downloaders to inherit from
 """
 
 import os
+import sys
 import logging
 from pathlib import Path
 from datetime import datetime
 from abc import ABC, abstractmethod
 
 # Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()]
+)
 logger = logging.getLogger(__name__)
 
 class BaseDownloader(ABC):
@@ -51,6 +57,11 @@ class BaseDownloader(ABC):
         """Download gazetteer data. To be implemented by subclasses."""
         pass
     
+    @abstractmethod
+    def export(self):
+        """Export downloaded data. To be implemented by subclasses."""
+        pass
+    
     def run(self, download=False, export=False, all=False):
         """
         Run the downloader operations based on provided options.
@@ -66,7 +77,8 @@ class BaseDownloader(ABC):
             if all or download:
                 self.download()
             
-            # Export step can be implemented by subclasses if needed
+            if all or export:
+                self.export()
             
             self.end_time = datetime.now()
             elapsed_time = (self.end_time - self.start_time).total_seconds()

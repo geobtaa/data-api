@@ -1,6 +1,7 @@
 import os
 import csv
 import logging
+import sys
 from sqlalchemy import create_engine, insert, delete, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime
@@ -59,6 +60,15 @@ class BaseImporter:
         self.total_rows = 0
         self.processed_rows = 0
         self.errors = []
+        
+        # Increase CSV field size limit
+        maxInt = sys.maxsize
+        while True:
+            try:
+                csv.field_size_limit(maxInt)
+                break
+            except OverflowError:
+                maxInt = int(maxInt/10)
         
     def find_csv_files(self) -> List[str]:
         """Find CSV files in the specified directory."""

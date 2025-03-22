@@ -27,7 +27,14 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 
-from .base_downloader import BaseDownloader
+# Fix imports to work both as a module and as a direct script
+try:
+    # When run as a module
+    from .base_downloader import BaseDownloader
+except ImportError:
+    # When run directly
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
+    from app.gazetteer.downloaders.base_downloader import BaseDownloader
 
 # Setup logging
 logger = logging.getLogger("geonames_downloader")
@@ -52,73 +59,42 @@ class GeoNamesDownloader(BaseDownloader):
         self.txt_file = self.data_dir / "US.txt"
     
     def download(self):
-        """Download the GeoNames data and extract it."""
-        if self.txt_file.exists():
-            logger.info(f"GeoNames data file already exists at {self.txt_file}")
-            return
+        """Download GeoNames data for the US."""
+        url = 'https://download.geonames.org/export/dump/US.zip'
+        zip_path = self.data_dir / 'US.zip'
         
-        if not self.zip_file.exists():
-            logger.info(f"Downloading file from {self.GEONAMES_URL}...")
-            try:
-                response = requests.get(self.GEONAMES_URL, stream=True)
-                response.raise_for_status()
-                
-                # Get total file size for progress reporting
-                total_size = int(response.headers.get('content-length', 0))
-                downloaded = 0
-                chunk_size = 8192
-                
-                with open(self.zip_file, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=chunk_size):
-                        if chunk:
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            progress = downloaded / total_size * 100 if total_size > 0 else 0
-                            sys.stdout.write(f"\rDownloading... {progress:.1f}% ({downloaded/(1024*1024):.1f}MB / {total_size/(1024*1024):.1f}MB)")
-                            sys.stdout.flush()
-                
-                print("\nDownload completed successfully.")
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Failed to download file: {e}")
-                return
-        else:
-            logger.info(f"ZIP file already exists at {self.zip_file}")
+        logger.info(f"Downloading GeoNames US data from {url}")
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        
+        with open(zip_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        logger.info(f"Download complete: {zip_path}")
         
         # Extract the ZIP file
-        logger.info(f"Extracting {self.zip_file}...")
-        try:
-            with zipfile.ZipFile(self.zip_file, 'r') as zip_ref:
-                # Find the US.txt file in the archive
-                for file_info in zip_ref.infolist():
-                    if file_info.filename == 'US.txt':
-                        # Extract the file
-                        with zip_ref.open(file_info) as source, open(self.txt_file, 'wb') as dest:
-                            dest.write(source.read())
-                        logger.info(f"Extracted US.txt to {self.txt_file}")
-                        break
-                else:
-                    logger.error("US.txt file not found in the ZIP archive")
-                    return
-            
-            # Verify the extracted file exists
-            if not self.txt_file.exists():
-                logger.error(f"Failed to extract {self.txt_file} from the ZIP archive")
-                return
-            
-            logger.info(f"Successfully extracted GeoNames data to {self.txt_file}")
-            
-            # Optionally remove the ZIP file to save space
-            # self.zip_file.unlink()
-            # logger.info(f"Removed ZIP file {self.zip_file}")
-            
-        except zipfile.BadZipFile:
-            logger.error(f"The file {self.zip_file} is not a valid ZIP file")
-            return
-        except Exception as e:
-            logger.error(f"Error extracting ZIP file: {e}")
-            return
+        logger.info(f"Extracting {zip_path} to {self.data_dir}")
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(self.data_dir)
         
-        logger.info("Download and extraction completed successfully.")
+        logger.info("Extraction complete")
+        
+        # Remove .zip file after extraction
+        zip_path.unlink()
+        logger.info(f"Removed {zip_path}")
+        
+        return True
+    
+    def export(self):
+        """
+        Export GeoNames data.
+        
+        For GeoNames, the data is already in text format, so no additional export is needed.
+        The .txt files will be directly consumed by the importer.
+        """
+        logger.info("GeoNames data is already in text format - no export needed.")
+        return True
 
 def main():
     """Parse command line arguments and run the downloader."""

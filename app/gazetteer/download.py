@@ -7,6 +7,8 @@ It can be used to download data for one or more gazetteers.
 
 Usage:
     python -m app.gazetteer.download [options]
+    OR
+    python app/gazetteer/download.py [options]
 
 Arguments:
     --gazetteer     Gazetteer to download (wof, btaa, geonames). Can be specified multiple times.
@@ -20,10 +22,18 @@ Arguments:
 import argparse
 import logging
 import sys
+import os
 from datetime import datetime
 
-# Use absolute imports instead of relative
-from app.gazetteer.downloaders import WofDownloader, GeoNamesDownloader
+# Fix imports to work both as a module and as a direct script
+try:
+    # When run as a module (python -m app.gazetteer.download)
+    from app.gazetteer.downloaders import WofDownloader, GeoNamesDownloader
+except ModuleNotFoundError:
+    # When run directly (python app/gazetteer/download.py)
+    # Add the project root to the Python path
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+    from app.gazetteer.downloaders import WofDownloader, GeoNamesDownloader
 
 # Setup logging
 logging.basicConfig(
