@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 import logging
 import sys
 from app.api.v1.endpoints import router as api_router
+from app.api.v1.gazetteer import router as gazetteer_router
 from app.elasticsearch import init_elasticsearch, close_elasticsearch
 from db.database import database
 from contextlib import asynccontextmanager
@@ -50,7 +51,9 @@ app.add_middleware(
     max_age=3600,  # Cache preflight requests for 1 hour
 )
 
+# Include routers
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(gazetteer_router, prefix="/api/v1")
 
 
 @app.exception_handler(Exception)

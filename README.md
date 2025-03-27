@@ -94,6 +94,22 @@ You can manually clear the cache using:
 GET /api/v1/cache/clear?cache_type=search|document|suggest|all
 ```
 
+## Colophon
+
+### Gazetteers
+
+#### BTAA Spatial Metadata
+
+Data from BTAA GIN.
+
+#### GeoNames
+
+Data from GeoNames. [License - CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+
+#### Who's On First
+
+Data from Who's On First. [License](https://whosonfirst.org/docs/licenses/)
+
 ## TODO
 
 X = done; O = in progress
@@ -115,7 +131,7 @@ X = done; O = in progress
 - [X] Search Results - bookmarked items
 - [X] Item View - citations
 - [X] Item View - downloads
-- [O] Item View - relations (triplestore)
+- [X] Item View - relations (triplestore)
 - [ ] Item View - exports (Shapefile, CSV, GeoJSON)
 - [ ] Item View - export conversions (Shapefile to: GeoJSON, CSV, TSV, etc)
 - [ ] Item View - code previews (Py, R, Leaflet)
@@ -126,7 +142,8 @@ X = done; O = in progress
 - [ ] Item View - metadata
 - [ ] Item View - related items (vector metadata search)
 - [ ] Item View - similar images (vector imagery search)
-- [ ] Gazetteer - Geonames
-- [ ] Gazetteer - Who's on First
+- [X] Gazetteer - BTAA Spatial
+- [X] Gazetteer - Geonames
+- [X] Gazetteer - Who's on First
 - [ ] Gazetteer - USGS Geographic Names Information System (GNIS)
 - [ ] GeoJSONs
