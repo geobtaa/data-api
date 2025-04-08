@@ -32,32 +32,32 @@ async def list_gazetteers():
     try:
         # Get record counts for each gazetteer
         geonames_count = await database.fetch_val(
-            select([func.count()]).select_from(gazetteer_geonames)
+            select(func.count()).select_from(gazetteer_geonames)
         )
         
         wof_spr_count = await database.fetch_val(
-            select([func.count()]).select_from(gazetteer_wof_spr)
+            select(func.count()).select_from(gazetteer_wof_spr)
         )
         
         btaa_count = await database.fetch_val(
-            select([func.count()]).select_from(gazetteer_btaa)
+            select(func.count()).select_from(gazetteer_btaa)
         )
         
         # Additional WOF table counts
         wof_ancestors_count = await database.fetch_val(
-            select([func.count()]).select_from(gazetteer_wof_ancestors)
+            select(func.count()).select_from(gazetteer_wof_ancestors)
         )
         
         wof_concordances_count = await database.fetch_val(
-            select([func.count()]).select_from(gazetteer_wof_concordances)
+            select(func.count()).select_from(gazetteer_wof_concordances)
         )
         
         wof_geojson_count = await database.fetch_val(
-            select([func.count()]).select_from(gazetteer_wof_geojson)
+            select(func.count()).select_from(gazetteer_wof_geojson)
         )
         
         wof_names_count = await database.fetch_val(
-            select([func.count()]).select_from(gazetteer_wof_names)
+            select(func.count()).select_from(gazetteer_wof_names)
         )
         
         return {
@@ -68,7 +68,7 @@ async def list_gazetteers():
                     "attributes": {
                         "name": "GeoNames",
                         "description": "GeoNames geographical database",
-                        "record_count": geonames_count,
+                        "record_count": geonames_count or 0,
                         "website": "https://www.geonames.org/"
                     }
                 },
@@ -78,13 +78,13 @@ async def list_gazetteers():
                     "attributes": {
                         "name": "Who's on First",
                         "description": "Who's on First gazetteer from Mapzen",
-                        "record_count": wof_spr_count,
+                        "record_count": wof_spr_count or 0,
                         "website": "https://whosonfirst.org/",
                         "additional_tables": {
-                            "ancestors": wof_ancestors_count,
-                            "concordances": wof_concordances_count,
-                            "geojson": wof_geojson_count,
-                            "names": wof_names_count
+                            "ancestors": wof_ancestors_count or 0,
+                            "concordances": wof_concordances_count or 0,
+                            "geojson": wof_geojson_count or 0,
+                            "names": wof_names_count or 0
                         }
                     }
                 },
@@ -94,14 +94,14 @@ async def list_gazetteers():
                     "attributes": {
                         "name": "BTAA",
                         "description": "Big Ten Academic Alliance Geoportal gazetteer",
-                        "record_count": btaa_count,
+                        "record_count": btaa_count or 0,
                         "website": "https://geo.btaa.org/"
                     }
                 }
             ],
             "meta": {
                 "total_gazetteers": 3,
-                "total_records": geonames_count + wof_spr_count + btaa_count
+                "total_records": (geonames_count or 0) + (wof_spr_count or 0) + (btaa_count or 0)
             }
         }
     except Exception as e:
@@ -142,7 +142,7 @@ async def search_geonames(
     """
     try:
         # Build query
-        query = select([gazetteer_geonames])
+        query = select(gazetteer_geonames)
         
         # Apply filters
         conditions = []
@@ -196,7 +196,7 @@ async def search_geonames(
         results = await database.fetch_all(query)
         
         # Get total count for pagination
-        count_query = select([func.count()]).select_from(gazetteer_geonames)
+        count_query = select(func.count()).select_from(gazetteer_geonames)
         if conditions:
             count_query = count_query.where(and_(*conditions))
         
@@ -283,7 +283,7 @@ async def search_wof(
     """
     try:
         # Build query
-        query = select([gazetteer_wof_spr])
+        query = select(gazetteer_wof_spr)
         
         # Apply filters
         conditions = []
@@ -321,7 +321,7 @@ async def search_wof(
         results = await database.fetch_all(query)
         
         # Get total count for pagination
-        count_query = select([func.count()]).select_from(gazetteer_wof_spr)
+        count_query = select(func.count()).select_from(gazetteer_wof_spr)
         if conditions:
             count_query = count_query.where(and_(*conditions))
         
@@ -394,7 +394,7 @@ async def get_wof_details(wok_id: int):
     """
     try:
         # Get basic info
-        spr_query = select([gazetteer_wof_spr]).where(gazetteer_wof_spr.c.wok_id == wok_id)
+        spr_query = select(gazetteer_wof_spr).where(gazetteer_wof_spr.c.wok_id == wok_id)
         spr = await database.fetch_one(spr_query)
         
         if not spr:
@@ -408,19 +408,19 @@ async def get_wof_details(wok_id: int):
                 spr_record[key] = float(spr_record[key])
         
         # Get ancestors
-        ancestors_query = select([gazetteer_wof_ancestors]).where(gazetteer_wof_ancestors.c.wok_id == wok_id)
+        ancestors_query = select(gazetteer_wof_ancestors).where(gazetteer_wof_ancestors.c.wok_id == wok_id)
         ancestors = await database.fetch_all(ancestors_query)
         
         # Get names
-        names_query = select([gazetteer_wof_names]).where(gazetteer_wof_names.c.wok_id == wok_id)
+        names_query = select(gazetteer_wof_names).where(gazetteer_wof_names.c.wok_id == wok_id)
         names = await database.fetch_all(names_query)
         
         # Get concordances
-        concordances_query = select([gazetteer_wof_concordances]).where(gazetteer_wof_concordances.c.wok_id == wok_id)
+        concordances_query = select(gazetteer_wof_concordances).where(gazetteer_wof_concordances.c.wok_id == wok_id)
         concordances = await database.fetch_all(concordances_query)
         
         # Get GeoJSON
-        geojson_query = select([gazetteer_wof_geojson]).where(gazetteer_wof_geojson.c.wok_id == wok_id)
+        geojson_query = select(gazetteer_wof_geojson).where(gazetteer_wof_geojson.c.wok_id == wok_id)
         geojson = await database.fetch_all(geojson_query)
         
         # Format result
@@ -486,7 +486,7 @@ async def search_btaa(
     """
     try:
         # Build query
-        query = select([gazetteer_btaa])
+        query = select(gazetteer_btaa)
         
         # Apply filters
         conditions = []
@@ -525,7 +525,7 @@ async def search_btaa(
         results = await database.fetch_all(query)
         
         # Get total count for pagination
-        count_query = select([func.count()]).select_from(gazetteer_btaa)
+        count_query = select(func.count()).select_from(gazetteer_btaa)
         if conditions:
             count_query = count_query.where(and_(*conditions))
         
