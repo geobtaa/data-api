@@ -11,9 +11,10 @@ logger = logging.getLogger(__name__)
 
 # Setup Celery
 celery_app = Celery(
-    "image_tasks",
+    "tasks",
     broker=f"redis://{os.getenv('REDIS_HOST', 'redis')}:{os.getenv('REDIS_PORT', 6379)}/0",
     backend=f"redis://{os.getenv('REDIS_HOST', 'redis')}:{os.getenv('REDIS_PORT', 6379)}/0",
+    include=["app.tasks.worker", "app.tasks.summarization"],  # Include both task modules
 )
 
 # Configure Celery

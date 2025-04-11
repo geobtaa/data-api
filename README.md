@@ -94,6 +94,18 @@ You can manually clear the cache using:
 GET /api/v1/cache/clear?cache_type=search|document|suggest|all
 ```
 
+## AI Summarization
+
+The API uses OpenAI's ChatGPT API to generate summaries of historical maps and geographic datasets. To use this feature:
+
+1. Set your OpenAI API key in the `.env` file:
+```
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-3.5-turbo
+```
+
+2. The summarization service will automatically use this API key to generate summaries.
+
 ## Colophon
 
 ### Gazetteers

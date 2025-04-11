@@ -1,9 +1,12 @@
 from .client import es
 from db.database import database
-from db.models import geoblacklight_development
+from db.models import geoblacklight_development, ai_enrichments
 import json
 import re
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 async def index_documents():
@@ -18,7 +21,7 @@ async def index_documents():
     await init_elasticsearch()
 
     documents = await database.fetch_all(geoblacklight_development.select())
-    bulk_data = prepare_bulk_data(documents, index_name)
+    bulk_data = await prepare_bulk_data(documents, index_name)
 
     if bulk_data:
         return await perform_bulk_indexing(bulk_data, index_name)
@@ -26,17 +29,17 @@ async def index_documents():
     return {"message": "No documents to index"}
 
 
-def prepare_bulk_data(documents, index_name):
+async def prepare_bulk_data(documents, index_name):
     """Prepare documents for bulk indexing."""
     bulk_data = []
     for doc in documents:
-        doc_dict = process_document(dict(doc))
+        doc_dict = await process_document(dict(doc))
         bulk_data.append({"index": {"_index": index_name, "_id": doc_dict["id"]}})
         bulk_data.append(doc_dict)
     return bulk_data
 
 
-def process_document(doc_dict):
+async def process_document(doc_dict):
     """Process a single document for indexing."""
     for key, value in doc_dict.items():
         if isinstance(value, (list, tuple)):
@@ -49,13 +52,21 @@ def process_document(doc_dict):
         elif key == "locn_geometry":
             try:
                 doc_dict[key] = process_geometry(value)
-            except Exception as e:
-                print(f"Error processing locn_geometry: {e}")
+            except Exception:
+                doc_dict[key] = None
         elif key == "dcat_bbox":
             try:
                 doc_dict[key] = process_geometry(value)
-            except Exception as e:
-                print(f"Error processing dcat_bbox: {e}")
+            except Exception:
+                doc_dict[key] = None
+        elif key == "dcat_centroid":
+            try:
+                doc_dict[key] = process_geometry(value)
+            except Exception:
+                doc_dict[key] = None
+
+    # Add summaries to the document
+    doc_dict["ai_summaries"] = await get_document_summaries(doc_dict["id"])
 
     # Clean and prepare suggestion inputs
     suggestion_inputs = []
@@ -116,36 +127,108 @@ def process_document(doc_dict):
     # Add suggestion field with cleaned data - removed contexts
     doc_dict["suggest"] = {"input": suggestion_inputs}
 
-    # print(f"Indexing suggestions for {doc_dict['id']}: {doc_dict['suggest']}")  # Debug output
     return doc_dict
 
 
-def process_geometry(geometry):
-    """Process geometry fields in a document."""
+async def get_document_summaries(document_id):
+    """Get summaries for a document."""
     try:
-        envelope_match = re.match(r"ENVELOPE\(([-\d.]+),([-\d.]+),([-\d.]+),([-\d.]+)\)", geometry)
-        if envelope_match:
-            minx, maxx, maxy, miny = map(float, envelope_match.groups())
-            geojson_geometry = {
-                "type": "Polygon",
-                "coordinates": [
-                    [[minx, maxy], [minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]]
-                ],
-            }
-            return geojson_geometry
+        query = """
+            SELECT enrichment_id, ai_provider, model, response, created_at
+            FROM ai_enrichments
+            WHERE document_id = :document_id
+            ORDER BY created_at DESC
+        """
+        summaries = await database.fetch_all(query, {"document_id": document_id})
+
+        # Process summaries
+        processed_summaries = []
+        for summary in summaries:
+            summary_dict = dict(summary)
+
+            # Extract the summary text from the response JSON
+            if summary_dict.get("response"):
+                try:
+                    response_data = (
+                        json.loads(summary_dict["response"])
+                        if isinstance(summary_dict["response"], str)
+                        else summary_dict["response"]
+                    )
+                    summary_dict["summary"] = response_data.get("summary", "")
+                except (json.JSONDecodeError, AttributeError):
+                    summary_dict["summary"] = ""
+
+            processed_summaries.append(summary_dict)
+
+        return processed_summaries
     except Exception as e:
-        print(f"Error processing locn_geometry: {e}")
+        print(f"Error getting summaries for document {document_id}: {str(e)}")
+        return []
 
 
-async def perform_bulk_indexing(bulk_data, index_name):
-    """Perform bulk indexing operation."""
-    response = await es.bulk(operations=bulk_data, refresh=True)
+def process_geometry(geometry):
+    """Process geometry for Elasticsearch."""
+    if not geometry:
+        return None
 
-    if response.get("errors"):
-        for item in response["items"]:
-            if "error" in item["index"]:
-                print(f"Error indexing document {item['index']['_id']}: {item['index']['error']}")
+    try:
+        # Try to parse as GeoJSON
+        if isinstance(geometry, str):
+            geometry = json.loads(geometry)
 
-    stats = await es.indices.stats(index=index_name)
-    doc_count = stats["indices"][index_name]["total"]["docs"]["count"]
-    return {"message": f"Successfully indexed {doc_count} documents"}
+        # Handle different geometry types
+        if geometry.get("type") == "Point":
+            return {"type": "point", "coordinates": geometry.get("coordinates", [0, 0])}
+        elif geometry.get("type") in ["Polygon", "MultiPolygon"]:
+            return geometry
+        else:
+            return None
+    except Exception:
+        return None
+
+
+async def perform_bulk_indexing(bulk_data, index_name, bulk_size=100):
+    """Perform bulk indexing in smaller chunks."""
+    # Split the bulk_data into smaller chunks
+    for i in range(0, len(bulk_data), bulk_size):
+        chunk = bulk_data[i : i + bulk_size]
+        try:
+            # Perform the bulk operation for the current chunk
+            response = await es.bulk(operations=chunk, index=index_name, refresh=True)
+            # Check for errors in the response
+            if response.get("errors"):
+                print(f"Errors occurred during bulk indexing: {response['items']}")
+        except Exception as e:
+            print(f"Exception during bulk indexing: {str(e)}")
+            # Optionally, implement retry logic here
+
+
+async def reindex_documents():
+    """Reindex all documents from PostgreSQL into Elasticsearch with the new mapping."""
+    index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
+
+    try:
+        # Delete the existing index if it exists
+        if await es.indices.exists(index=index_name):
+            logger.info(f"Deleting existing index {index_name}")
+            await es.indices.delete(index=index_name)
+
+        # Initialize Elasticsearch with the new mapping
+        from .client import init_elasticsearch
+
+        await init_elasticsearch()
+
+        # Fetch all documents from the database
+        documents = await database.fetch_all(geoblacklight_development.select())
+
+        # Prepare bulk data for indexing
+        bulk_data = await prepare_bulk_data(documents, index_name)
+
+        if bulk_data:
+            return await perform_bulk_indexing(bulk_data, index_name)
+
+        return {"message": "No documents to index"}
+
+    except Exception as e:
+        logger.error(f"Error during reindexing: {str(e)}", exc_info=True)
+        raise

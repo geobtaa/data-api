@@ -12,13 +12,21 @@ import os
 from ...elasticsearch.client import es
 from ...services.image_service import ImageService
 from ...services.citation_service import CitationService
-from ...services.cache_service import cached_endpoint, CacheService, ENDPOINT_CACHE, invalidate_cache_with_prefix
+from ...services.cache_service import (
+    cached_endpoint,
+    CacheService,
+    ENDPOINT_CACHE,
+    invalidate_cache_with_prefix,
+)
+from ...services.llm_service import LLMService
+from ...tasks.summarization import generate_item_summary
 import logging
 import time
 from fastapi.responses import JSONResponse, Response
 from .jsonp import JSONPResponse
 from datetime import datetime
 from app.services.download_service import DownloadService
+from app.elasticsearch.index import reindex_documents
 
 router = APIRouter()
 
@@ -133,11 +141,13 @@ async def get_document_relationships(doc_id: str) -> Dict:
         for rel in db_relationships:
             if rel["predicate"] not in relationships:
                 relationships[rel["predicate"]] = []
-            relationships[rel["predicate"]].append({
-                "doc_id": rel["object_id"],
-                "doc_title": rel["dct_title_s"],
-                "link": f"{base_url}/documents/{rel['object_id']}"
-            })
+            relationships[rel["predicate"]].append(
+                {
+                    "doc_id": rel["object_id"],
+                    "doc_title": rel["dct_title_s"],
+                    "link": f"{base_url}/documents/{rel['object_id']}",
+                }
+            )
             logger.debug(f"Added relationship: {rel['predicate']} -> {rel['object_id']}")
 
         logger.info(f"Final relationships structure: {relationships}")
@@ -150,44 +160,62 @@ async def get_document_relationships(doc_id: str) -> Dict:
 
 @router.get("/documents/{id}")
 @cached_endpoint(ttl=DOCUMENT_CACHE_TTL)
-async def get_document(id: str, callback: Optional[str] = None, include_relationships: bool = True):
+async def get_document(
+    id: str,
+    callback: Optional[str] = None,
+    include_relationships: bool = True,
+    include_summaries: bool = True,
+):
     """Get a single document by ID."""
     try:
         # Get document
         query = geoblacklight_development.select().where(geoblacklight_development.c.id == id)
         result = await database.fetch_one(query)
-        
+
         if not result:
             raise HTTPException(status_code=404, detail="Document not found")
-        
+
         # Convert to dict and process
         doc = dict(result)
-        
+
         # Add UI attributes
         processed_doc = add_ui_attributes(doc)
-        
+
         # Get relationships
         if include_relationships:
             relationships = await get_document_relationships(id)
             logger.info(f"Got relationships for {id}: {relationships}")  # Debug line
         else:
             relationships = {}
-        
+
         # Add relationships to UI attributes
         processed_doc["ui_relationships"] = relationships
-        
+
+        # Get summaries if requested
+        summaries = []
+        if include_summaries:
+            try:
+                summaries_query = """
+                    SELECT * FROM ai_enrichments 
+                    WHERE document_id = :document_id 
+                    ORDER BY created_at DESC
+                """
+                summaries_result = await database.fetch_all(summaries_query, {"document_id": id})
+                summaries = [dict(summary) for summary in summaries_result]
+                logger.info(f"Got {len(summaries)} summaries for {id}")
+            except Exception as e:
+                logger.error(f"Error fetching summaries: {str(e)}")
+                summaries = []
+
+        # Add summaries to UI attributes
+        processed_doc["ui_summaries"] = summaries
+
         # Create response
-        response = {
-                "data": {
-                    "type": "document",
-                    "id": id,
-                    "attributes": processed_doc
-                }
-            }
-        
+        response = {"data": {"type": "document", "id": id, "attributes": processed_doc}}
+
         logger.info(f"Final response structure: {response}")  # Debug line
         return create_response(response, callback)
-        
+
     except Exception as e:
         logger.error(f"Document fetch failed: {e}", exc_info=True)
         error_response = {"message": "Document fetch failed", "error": str(e)}
@@ -210,7 +238,7 @@ async def list_documents(
         doc_dict = add_thumbnail_url(doc_dict)
         doc_dict = add_citations(doc_dict)
         viewer_attributes = create_viewer_attributes(doc_dict)
-        
+
         # Use DownloadService to get download options
         download_service = DownloadService(doc_dict)
         ui_downloads = download_service.get_download_options()
@@ -235,21 +263,6 @@ async def list_documents(
     return create_response({"data": processed_documents}, callback)
 
 
-@router.post("/index")
-async def index_to_elasticsearch(
-    callback: Optional[str] = Query(None, description="JSONP callback name")
-):
-    """Index all documents from PostgreSQL to Elasticsearch."""
-    # When indexing, invalidate all search and suggest caches
-    if ENDPOINT_CACHE:
-        logger.info("Invalidating search and suggest caches")
-        await invalidate_cache_with_prefix("app.api.v1.endpoints:search")
-        await invalidate_cache_with_prefix("app.api.v1.endpoints:suggest")
-    
-    result = await index_documents()
-    return create_response(result, callback)
-
-
 @router.get("/search")
 @cached_endpoint(ttl=SEARCH_CACHE_TTL)
 async def search(
@@ -264,12 +277,12 @@ async def search(
     try:
         timings = {}
         cache_status = "miss"  # Default to cache miss for timing info
-        
+
         if ENDPOINT_CACHE:
             timings["cache"] = "enabled"
         else:
             timings["cache"] = "disabled"
-        
+
         start_time = time.time()
 
         # Calculate skip from page/limit
@@ -327,7 +340,9 @@ async def search(
         process_time = time.time() - process_start
         timings["document_processing"] = {
             "total": f"{(process_time * 1000):.0f}ms",
-            "per_document": f"{((process_time / docs_processed) * 1000):.0f}ms" if docs_processed > 0 else "0ms",
+            "per_document": (
+                f"{((process_time / docs_processed) * 1000):.0f}ms" if docs_processed > 0 else "0ms"
+            ),
             "thumbnail_service": f"{(thumbnail_time * 1000):.0f}ms",
             "citation_service": f"{(citation_time * 1000):.0f}ms",
             "viewer_service": f"{(viewer_time * 1000):.0f}ms",
@@ -476,33 +491,38 @@ async def suggest(
 
 
 @router.get("/cache/clear")
-async def clear_cache(cache_type: Optional[str] = Query(None, description="Type of cache to clear (search, document, suggest, all)")):
+async def clear_cache(
+    cache_type: Optional[str] = Query(
+        None, description="Type of cache to clear (search, document, suggest, all)"
+    )
+):
     """Clear specified cache or all cache if not specified."""
     if not ENDPOINT_CACHE:
-        return JSONResponse(content={"message": "Caching is disabled. Set ENDPOINT_CACHE=true to enable."})
-    
+        return JSONResponse(
+            content={"message": "Caching is disabled. Set ENDPOINT_CACHE=true to enable."}
+        )
+
     try:
         cache_service = CacheService()
-        
+
         if cache_type == "search" or cache_type is None:
             await invalidate_cache_with_prefix("app.api.v1.endpoints:search")
-        
+
         if cache_type == "document" or cache_type is None:
             await invalidate_cache_with_prefix("app.api.v1.endpoints:get_document")
-        
+
         if cache_type == "suggest" or cache_type is None:
             await invalidate_cache_with_prefix("app.api.v1.endpoints:suggest")
-        
+
         if cache_type == "all" or cache_type is None:
             await cache_service.flush_all()
-        
-        return JSONResponse(content={"message": f"Cache cleared successfully: {cache_type or 'all'}"})
+
+        return JSONResponse(
+            content={"message": f"Cache cleared successfully: {cache_type or 'all'}"}
+        )
     except Exception as e:
         logger.error(f"Error clearing cache: {str(e)}")
-        return JSONResponse(
-            content={"error": f"Failed to clear cache: {str(e)}"},
-            status_code=500
-        )
+        return JSONResponse(content={"error": f"Failed to clear cache: {str(e)}"}, status_code=500)
 
 
 async def perform_bulk_indexing(bulk_data, index_name, bulk_size=100):
@@ -539,3 +559,118 @@ async def get_thumbnail(image_hash: str):
         raise HTTPException(status_code=404, detail="Image not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/documents/{id}/summarize")
+async def summarize_document(
+    id: str,
+    background_tasks: BackgroundTasks,
+    callback: Optional[str] = Query(None, description="JSONP callback name"),
+):
+    """
+    Trigger the generation of a summary for a document.
+    This endpoint will:
+    1. Fetch the document metadata
+    2. Get the asset path and type
+    3. Trigger an asynchronous task to generate the summary
+    4. Return immediately with a task ID
+    """
+    try:
+        # Fetch the document
+        async with database.transaction():
+            query = select(geoblacklight_development).where(geoblacklight_development.c.id == id)
+            result = await database.fetch_one(query)
+
+            if not result:
+                raise HTTPException(status_code=404, detail="Document not found")
+
+            # Convert to dict
+            document = dict(result)
+
+            # Get asset information
+            asset_path = (
+                document.get("attributes", {})
+                .get("dct_references_s", {})
+                .get("http://schema.org/downloadUrl")
+            )
+            asset_type = document.get("attributes", {}).get("dc_format_s")
+
+            # Trigger the summarization task
+            task = generate_item_summary.delay(
+                item_id=id, metadata=document, asset_path=asset_path, asset_type=asset_type
+            )
+
+            # Invalidate the document cache since we'll be updating it
+            invalidate_cache_with_prefix(f"document:{id}")
+
+            response_data = {
+                "status": "success",
+                "message": "Summary generation started",
+                "task_id": task.id,
+            }
+
+            return create_response(response_data, callback)
+
+    except Exception as e:
+        logger.error(f"Error triggering summary generation for document {id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/documents/{id}/summaries")
+async def get_document_summaries(
+    id: str, callback: Optional[str] = Query(None, description="JSONP callback name")
+):
+    """
+    Get all summaries for a document.
+
+    Args:
+        id: The document ID
+        callback: Optional JSONP callback name
+
+    Returns:
+        JSON response with the summaries
+    """
+    try:
+        # Query the database for summaries
+        async with database.transaction():
+            query = """
+                SELECT * FROM ai_enrichments 
+                WHERE document_id = :document_id 
+                ORDER BY created_at DESC
+            """
+            summaries = await database.fetch_all(query, {"document_id": id})
+
+            # Convert to list of dicts
+            summaries_list = [dict(summary) for summary in summaries]
+
+            # Create response
+            response_data = {
+                "data": {"type": "summaries", "id": id, "attributes": {"summaries": summaries_list}}
+            }
+
+            return create_response(response_data, callback)
+
+    except Exception as e:
+        logger.error(f"Error retrieving summaries for document {id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/reindex", response_model=dict)
+async def reindex(callback: Optional[str] = Query(None, description="JSONP callback name")):
+    """Trigger reindexing of all documents in Elasticsearch."""
+    try:
+        # When reindexing, invalidate all search and suggest caches
+        if ENDPOINT_CACHE:
+            logger.info("Invalidating search and suggest caches")
+            await invalidate_cache_with_prefix("app.api.v1.endpoints:search")
+            await invalidate_cache_with_prefix("app.api.v1.endpoints:suggest")
+
+        result = await reindex_documents()
+        return create_response(
+            {"status": "success", "message": "Reindexing completed", "details": result}, callback
+        )
+    except Exception as e:
+        logger.error(f"Reindexing failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail={"message": "Reindexing failed", "error": str(e)}
+        )

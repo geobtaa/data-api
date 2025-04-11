@@ -1,4 +1,18 @@
-from sqlalchemy import Table, Column, String, Text, ARRAY, Boolean, TIMESTAMP, MetaData, Integer, BigInteger, Numeric, Date
+from sqlalchemy import (
+    Table,
+    Column,
+    String,
+    Text,
+    ARRAY,
+    Boolean,
+    TIMESTAMP,
+    MetaData,
+    Integer,
+    BigInteger,
+    Numeric,
+    Date,
+    JSON,
+)
 
 metadata = MetaData()
 
@@ -191,4 +205,20 @@ gazetteer_btaa = Table(
     Column("namelsad", String),
     Column("created_at", TIMESTAMP),
     Column("updated_at", TIMESTAMP),
+)
+
+# AI Enrichments table
+ai_enrichments = Table(
+    "ai_enrichments",
+    metadata,
+    Column("enrichment_id", Integer, primary_key=True, autoincrement=True),
+    Column("document_id", String, nullable=False, index=True),
+    Column("ai_provider", String, nullable=False),
+    Column("model", String, nullable=False),
+    Column("enrichment_type", String(50), nullable=False),
+    Column("prompt", JSON, nullable=True),
+    Column("output_parser", JSON, nullable=True),
+    Column("response", JSON, nullable=True),
+    Column("created_at", TIMESTAMP, nullable=False),
+    Column("updated_at", TIMESTAMP, nullable=False),
 )

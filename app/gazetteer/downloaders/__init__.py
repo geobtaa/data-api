@@ -9,4 +9,4 @@ from .base_downloader import BaseDownloader
 from .wof_downloader import WofDownloader
 from .geonames_downloader import GeoNamesDownloader
 
-__all__ = ['BaseDownloader', 'WofDownloader', 'GeoNamesDownloader'] 
+__all__ = ["BaseDownloader", "WofDownloader", "GeoNamesDownloader"]

@@ -89,15 +89,18 @@ services:
       dockerfile: Dockerfile
     command: celery -A app.tasks.worker worker --loglevel=INFO
     environment:
+      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/geoblacklight_development
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_TTL=604800
       - PYTHONUNBUFFERED=1  # Important for logging
+      - LOG_LEVEL=DEBUG
     volumes:
       - ./logs:/app/logs
       - .:/app  # Mount code for development
     depends_on:
       - redis
+      - paradedb
     networks:
       - elastic
 

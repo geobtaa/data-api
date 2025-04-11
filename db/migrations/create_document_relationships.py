@@ -15,13 +15,14 @@ from db.config import DATABASE_URL
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def create_relationships_table():
     """Create the document_relationships table."""
     try:
         # Create engine and inspector
         engine = create_engine(DATABASE_URL)
         inspector = inspect(engine)
-        
+
         # Create MetaData instance
         metadata = MetaData()
 
@@ -42,11 +43,15 @@ def create_relationships_table():
 
             # Create indexes
             with engine.connect() as conn:
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     CREATE INDEX IF NOT EXISTS idx_subject_id ON document_relationships(subject_id);
                     CREATE INDEX IF NOT EXISTS idx_object_id ON document_relationships(object_id);
                     CREATE INDEX IF NOT EXISTS idx_predicate ON document_relationships(predicate);
-                """))
+                """
+                    )
+                )
                 conn.commit()
                 logger.info("Created indexes on document_relationships table")
         else:
@@ -56,5 +61,6 @@ def create_relationships_table():
         logger.error(f"Error creating relationships table: {e}")
         raise
 
+
 if __name__ == "__main__":
-    create_relationships_table() 
+    create_relationships_table()

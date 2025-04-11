@@ -40,3 +40,9 @@ redis==5.0.0
 celery==5.3.6
 flower==2.0.1
 greenlet==3.1.1
+# LLM Service Dependencies
+pytesseract==0.3.10
+Pillow==10.2.0
+geopandas==0.14.3
+fiona==1.9.5
+openai==1.12.0

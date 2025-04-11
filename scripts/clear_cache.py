@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+
 def clear_redis_cache():
     """Clear all Redis databases used by the application."""
     try:
@@ -26,21 +27,22 @@ def clear_redis_cache():
         redis_client = redis.Redis(
             host=redis_host,
             port=redis_port,
-            decode_responses=False  # Keep binary responses for image data
+            decode_responses=False,  # Keep binary responses for image data
         )
 
         # Clear all databases
         redis_client.flushall()
-        
+
         logger.info(f"Successfully cleared all Redis databases on {redis_host}:{redis_port}")
-        
+
         # Get memory info
         memory_info = redis_client.info("memory")
         logger.info(f"Current memory usage: {memory_info.get('used_memory_human', 'unknown')}")
-        
+
     except Exception as e:
         logger.error(f"Error clearing Redis cache: {e}")
         raise
 
+
 if __name__ == "__main__":
-    clear_redis_cache() 
+    clear_redis_cache()

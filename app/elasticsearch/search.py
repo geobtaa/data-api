@@ -49,78 +49,108 @@ async def search_documents(
                 else:
                     filter_clauses.append({"term": {field: values}})
 
-        search_query = {
-            "query": {
-                "bool": {
-                    "must": (
-                        [{"match_all": {}}]
-                        if not query
-                        else [
+        # Build the search query
+        if search_criteria.get("query"):
+            # Create a multi-match query that searches across multiple fields
+            search_query = {
+                "query": {
+                    "bool": {
+                        "must": [
                             {
                                 "multi_match": {
-                                    "query": query,
+                                    "query": search_criteria["query"],
                                     "fields": [
-                                        "dct_title_s^3",
-                                        "dct_description_sm^2",
-                                        "dct_creator_sm",
-                                        "dct_publisher_sm",
-                                        "dct_subject_sm",
-                                        "dcat_theme_sm",
-                                        "dcat_keyword_sm",
-                                        "dct_spatial_sm",
+                                        "dct_title_s^3",  # Boost title matches
+                                        "dct_description_sm^2",  # Boost description matches
+                                        "summary^2",  # Add summary field with boost
+                                        "dct_creator_sm^2",  # Boost creator name matches
+                                        "dct_subject_sm^1.5",  # Boost subject matches
+                                        "dcat_keyword_sm^1.5",  # Boost keyword matches
+                                        "dct_publisher_sm",  # Include publisher name
+                                        "schema_provider_s",  # Include provider name
+                                        "dct_spatial_sm",  # Include spatial name
+                                        "gbl_displaynote_sm",  # Include display notes
                                     ],
+                                    "type": "best_fields",
+                                    "operator": "and",
                                 }
                             }
-                        ]
-                    ),
-                    "filter": filter_clauses,
-                }
-            },
-            "from": skip,
-            "size": limit,
-            "sort": sort or [{"_score": "desc"}],
-            "aggs": {
-                "id_agg": {"terms": {"field": "id"}},
-                "spatial_agg": {"terms": {"field": "dct_spatial_sm"}},
-                "resource_class_agg": {"terms": {"field": "gbl_resourceclass_sm"}},
-                "resource_type_agg": {"terms": {"field": "gbl_resourcetype_sm"}},
-                "index_year_agg": {"terms": {"field": "gbl_indexyear_im"}},
-                "language_agg": {"terms": {"field": "dct_language_sm"}},
-                "creator_agg": {"terms": {"field": "dct_creator_sm"}},
-                "provider_agg": {"terms": {"field": "schema_provider_s"}},
-                "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
-                "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
-            },
-            "suggest": {
-                "text": query,
-                "simple_phrase": {
-                    "phrase": {
-                        "field": "dct_title_s",
-                        "size": 1,
-                        "gram_size": 3,
-                        "direct_generator": [
-                            {
-                                "field": "dct_title_s",
-                                "suggest_mode": "always"
-                            },
-                            {
-                                "field": "dct_description_sm",
-                                "suggest_mode": "always"
-                            },
                         ],
-                        "highlight": {
-                            "pre_tag": "<em>",
-                            "post_tag": "</em>"
-                        }
+                        "filter": filter_clauses,
                     }
-                }
+                },
+                "from": skip,
+                "size": limit,
+                "sort": sort or [{"_score": "desc"}],
+                "track_total_hits": True,
+                "aggs": {
+                    "id_agg": {"terms": {"field": "id"}},
+                    "spatial_agg": {"terms": {"field": "dct_spatial_sm"}},
+                    "resource_class_agg": {"terms": {"field": "gbl_resourceclass_sm"}},
+                    "resource_type_agg": {"terms": {"field": "gbl_resourcetype_sm"}},
+                    "index_year_agg": {"terms": {"field": "gbl_indexyear_im"}},
+                    "language_agg": {"terms": {"field": "dct_language_sm"}},
+                    "creator_agg": {"terms": {"field": "dct_creator_sm"}},
+                    "provider_agg": {"terms": {"field": "schema_provider_s"}},
+                    "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
+                    "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
+                },
+                "suggest": {
+                    "text": query,
+                    "simple_phrase": {
+                        "phrase": {
+                            "field": "dct_title_s",
+                            "size": 1,
+                            "gram_size": 3,
+                            "direct_generator": [
+                                {"field": "dct_title_s", "suggest_mode": "always"},
+                                {"field": "dct_description_sm", "suggest_mode": "always"},
+                            ],
+                            "highlight": {"pre_tag": "<em>", "post_tag": "</em>"},
+                        }
+                    },
+                },
             }
-        }
+        else:
+            search_query = {
+                "query": {"bool": {"must": [{"match_all": {}}], "filter": filter_clauses}},
+                "from": skip,
+                "size": limit,
+                "sort": sort or [{"_score": "desc"}],
+                "track_total_hits": True,
+                "aggs": {
+                    "id_agg": {"terms": {"field": "id"}},
+                    "spatial_agg": {"terms": {"field": "dct_spatial_sm"}},
+                    "resource_class_agg": {"terms": {"field": "gbl_resourceclass_sm"}},
+                    "resource_type_agg": {"terms": {"field": "gbl_resourcetype_sm"}},
+                    "index_year_agg": {"terms": {"field": "gbl_indexyear_im"}},
+                    "language_agg": {"terms": {"field": "dct_language_sm"}},
+                    "creator_agg": {"terms": {"field": "dct_creator_sm"}},
+                    "provider_agg": {"terms": {"field": "schema_provider_s"}},
+                    "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
+                    "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
+                },
+                "suggest": {
+                    "text": query,
+                    "simple_phrase": {
+                        "phrase": {
+                            "field": "dct_title_s",
+                            "size": 1,
+                            "gram_size": 3,
+                            "direct_generator": [
+                                {"field": "dct_title_s", "suggest_mode": "always"},
+                                {"field": "dct_description_sm", "suggest_mode": "always"},
+                            ],
+                            "highlight": {"pre_tag": "<em>", "post_tag": "</em>"},
+                        }
+                    },
+                },
+            }
 
         logger.debug(f"ES Query: {json.dumps(search_query, indent=2)}")
 
         try:
-            response = await es.search(index=index_name, body=search_query, track_total_hits=True)
+            response = await es.search(index=index_name, body=search_query)
         except Exception as es_error:
             logger.error(f"Elasticsearch error: {str(es_error)}", exc_info=True)
             raise HTTPException(
@@ -217,11 +247,13 @@ async def process_search_response(response, limit, skip, search_criteria):
             for suggestion in simple_phrase:
                 if suggestion.get("options"):
                     for option in suggestion["options"]:
-                        suggestions.append({
-                            "text": option.get("text"),
-                            "highlighted": option.get("highlighted"),
-                            "score": option.get("score")
-                        })
+                        suggestions.append(
+                            {
+                                "text": option.get("text"),
+                                "highlighted": option.get("highlighted"),
+                                "score": option.get("score"),
+                            }
+                        )
 
         if not document_ids:
             logger.debug("No documents found")
@@ -243,7 +275,7 @@ async def process_search_response(response, limit, skip, search_criteria):
                         "first_page?": True,
                         "last_page?": True,
                     },
-                    "suggestions": suggestions  # Add suggestions to meta
+                    "suggestions": suggestions,  # Add suggestions to meta
                 },
                 "data": [],
                 "included": [],
@@ -300,14 +332,18 @@ async def process_search_response(response, limit, skip, search_criteria):
                     "current_page": (skip // limit) + 1,
                     "next_page": ((skip // limit) + 2) if (skip + limit) < total_hits else None,
                     "prev_page": ((skip // limit)) if skip > 0 else None,
-                    "total_pages": (total_hits // limit) + (1 if total_hits % limit > 0 else 0) if limit > 0 else 0,
+                    "total_pages": (
+                        (total_hits // limit) + (1 if total_hits % limit > 0 else 0)
+                        if limit > 0
+                        else 0
+                    ),
                     "limit_value": limit,
                     "offset_value": skip,
                     "total_count": total_hits,
                     "first_page?": (skip == 0),
                     "last_page?": (skip + limit) >= total_hits,
                 },
-                "suggestions": suggestions  # Add suggestions to meta
+                "suggestions": suggestions,  # Add suggestions to meta
             },
             "data": processed_documents,
             "included": included,

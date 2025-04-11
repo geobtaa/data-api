@@ -29,14 +29,15 @@ database = Database(ASYNC_DATABASE_URL)
 
 # Relationship mappings with their inverses
 RELATIONSHIP_MAPPINGS = {
-    'dct_relation_sm': ('relation', 'relation'),  # Bidirectional
-    'pcdm_memberof_sm': ('memberOf', 'hasMember'),
-    'dct_ispartof_sm': ('isPartOf', 'hasPart'),
-    'dct_source_sm': ('source', 'isSourceOf'),
-    'dct_isversionof_sm': ('isVersionOf', 'hasVersion'),
-    'dct_replaces_sm': ('replaces', 'isReplacedBy'),
-    'dct_isreplacedby_sm': ('isReplacedBy', 'replaces')
+    "dct_relation_sm": ("relation", "relation"),  # Bidirectional
+    "pcdm_memberof_sm": ("memberOf", "hasMember"),
+    "dct_ispartof_sm": ("isPartOf", "hasPart"),
+    "dct_source_sm": ("source", "isSourceOf"),
+    "dct_isversionof_sm": ("isVersionOf", "hasVersion"),
+    "dct_replaces_sm": ("replaces", "isReplacedBy"),
+    "dct_isreplacedby_sm": ("isReplacedBy", "replaces"),
 }
+
 
 async def populate_relationships():
     """Populate the document_relationships table."""
@@ -65,7 +66,7 @@ async def populate_relationships():
         for doc in documents:
             for field, (predicate, inverse_predicate) in RELATIONSHIP_MAPPINGS.items():
                 values = getattr(doc, field, None)
-                
+
                 if not values:
                     continue
 
@@ -81,7 +82,7 @@ async def populate_relationships():
                         INSERT INTO document_relationships (subject_id, predicate, object_id) 
                         VALUES (:subject, :predicate, :object)
                         """,
-                        {"subject": doc.id, "predicate": predicate, "object": target_id}
+                        {"subject": doc.id, "predicate": predicate, "object": target_id},
                     )
 
                     # Insert the inverse relationship
@@ -90,7 +91,7 @@ async def populate_relationships():
                         INSERT INTO document_relationships (subject_id, predicate, object_id) 
                         VALUES (:subject, :predicate, :object)
                         """,
-                        {"subject": target_id, "predicate": inverse_predicate, "object": doc.id}
+                        {"subject": target_id, "predicate": inverse_predicate, "object": doc.id},
                     )
                     relationship_count += 2
 
@@ -103,6 +104,7 @@ async def populate_relationships():
         if database.is_connected:
             await database.disconnect()
 
+
 if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
-    asyncio.run(populate_relationships()) 
+    asyncio.run(populate_relationships())
