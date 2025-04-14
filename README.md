@@ -5,7 +5,20 @@ FastAPI JSON:API for BTAA Aardvark Metadata
 
 ## Development
 
-Install dependencies:
+Install dependencies using `uv` (recommended):
+```bash
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create and activate a virtual environment
+uv venv
+source .venv/bin/activate
+
+# Install dependencies
+uv pip install -r requirements.txt
+```
+
+Alternatively, you can use pip:
 ```bash
 pip install -r requirements.txt
 ```
@@ -18,10 +31,35 @@ cp .env.example .env
 
 Run the Docker containers:
 
-* [ParadeDB](https://www.paradedb.com/)
-* [Elasticsearch](https://www.elastic.co/elasticsearch/)
-* [Redis](https://redis.io/) (for caching)
+The application uses several services:
 
+* [ParadeDB](https://www.paradedb.com/) (PostgreSQL-compatible database)
+  - Port: 2345
+  - Default credentials: postgres/postgres
+  - Database: geoblacklight_development
+
+* [Elasticsearch](https://www.elastic.co/elasticsearch/) (Search engine)
+  - Port: 9200
+  - Single-node configuration
+  - Security disabled for development
+  - 2GB memory allocation
+
+* [Redis](https://redis.io/) (Caching and message broker)
+  - Port: 6379
+  - Persistence enabled
+  - Used for API caching and Celery tasks
+
+* [Celery Worker](https://docs.celeryq.dev/) (Background task processor)
+  - Processes asynchronous tasks
+  - Connected to Redis and ParadeDB
+  - Logs available in ./logs directory
+
+* [Flower](https://flower.readthedocs.io/) (Celery monitoring)
+  - Port: 5555
+  - Web interface for monitoring Celery tasks
+  - Access at http://localhost:5555
+
+Start all services:
 ```bash
 docker compose up -d
 ```
