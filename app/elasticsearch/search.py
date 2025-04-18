@@ -94,9 +94,9 @@ async def search_documents(
                     "provider_agg": {"terms": {"field": "schema_provider_s"}},
                     "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
                     "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
-                }
+                },
             }
-            
+
             # Only add suggest if query is not empty
             if search_criteria["query"].strip():
                 search_query["suggest"] = {
@@ -132,7 +132,7 @@ async def search_documents(
                     "provider_agg": {"terms": {"field": "schema_provider_s"}},
                     "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
                     "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
-                }
+                },
             }
 
         logger.debug(f"ES Query: {json.dumps(search_query, indent=2)}")
@@ -146,7 +146,7 @@ async def search_documents(
                 sort=sort or [{"_score": "desc"}],
                 track_total_hits=True,
                 aggs=search_query["aggs"],
-                suggest=search_query.get("suggest")  # Only include suggest if it exists
+                suggest=search_query.get("suggest"),  # Only include suggest if it exists
             )
         except Exception as es_error:
             logger.error(f"Elasticsearch error: {str(es_error)}", exc_info=True)

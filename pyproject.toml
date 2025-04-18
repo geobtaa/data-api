@@ -1,3 +1,27 @@
+[project]
+name = "data-api"
+version = "0.1.0"
+description = "BTAA Geodata API"
+authors = [
+    {name = "Eric Larson", email = "ewlarson@gmail.com"},
+]
+dependencies = [
+    "celery>=5.3.0",
+    "elasticsearch>=9.0.0",
+    "python-dotenv>=1.0.0",
+    # Add your main dependencies here
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-cov==4.1.0",
+    "pytest-asyncio==0.25.3",
+    "black>=22.3",
+    "flake8>=6.0.0",
+    "flake8-pyproject>=1.2.3",
+]
+
 [tool.black]
 line-length = 100
 target-version = ['py39']
@@ -14,10 +38,31 @@ multi_line_output = 3
 line_length = 100
 include_trailing_comma = true
 
-[tool.poetry.scripts]
-lint = """
-    black . &&
-    isort . &&
-    flake8 . &&
-    mypy .
-"""
+[tool.setuptools]
+packages = ["app"]
+
+[tool.flake8]
+max-line-length = 100
+exclude = ".git,__pycache__,build,dist,venv,**/venv/**"
+extend-ignore = "E203"
+per-file-ignores = "__init__.py: F401"
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["*/tests/*", "*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+    "raise ImportError",
+    "except ImportError:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.coverage.html]
+directory = "coverage_html_report"
+

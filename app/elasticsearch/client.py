@@ -12,7 +12,7 @@ es = AsyncElasticsearch(
     ssl_show_warn=False,  # For development only
     request_timeout=60,  # Increase timeout to 60 seconds
     retry_on_timeout=True,  # Retry on timeout
-    max_retries=3  # Maximum number of retries
+    max_retries=3,  # Maximum number of retries
 )
 
 logger = logging.getLogger(__name__)

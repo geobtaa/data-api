@@ -5,7 +5,7 @@ Import all gazetteer data.
 This script runs all the gazetteer importers in sequence.
 - GeoNames: Imports data from tab-delimited .txt files
 - WOF: Imports data from .csv files
-- BTAA: Imports data from .csv files 
+- BTAA: Imports data from .csv files
 """
 
 import asyncio

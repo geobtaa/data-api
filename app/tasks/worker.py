@@ -11,8 +11,10 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(os.path.join(os.getenv("LOG_PATH", "logs"), "app.log"), mode='a', encoding='utf-8')
-    ]
+        logging.FileHandler(
+            os.path.join(os.getenv("LOG_PATH", "logs"), "app.log"), mode="a", encoding="utf-8"
+        ),
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -21,7 +23,11 @@ celery_app = Celery(
     "tasks",
     broker=f"redis://{os.getenv('REDIS_HOST', 'redis')}:{os.getenv('REDIS_PORT', 6379)}/0",
     backend=f"redis://{os.getenv('REDIS_HOST', 'redis')}:{os.getenv('REDIS_PORT', 6379)}/0",
-    include=["app.tasks.worker", "app.tasks.summarization", "app.tasks.ocr"],  # Include all task modules
+    include=[
+        "app.tasks.worker",
+        "app.tasks.summarization",
+        "app.tasks.ocr",
+    ],  # Include all task modules
 )
 
 # Configure Celery

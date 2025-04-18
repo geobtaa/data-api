@@ -592,53 +592,63 @@ async def summarize_document(
             # Get asset information
             asset_path = None
             asset_type = None
-            
+
             # Parse dct_references_s to identify candidate assets
             references = document.get("dct_references_s", {})
             logger.info(f"Raw references for document {id}: {references}")
-            
+
             if isinstance(references, str):
                 try:
                     references = json.loads(references)
-                    logger.info(f"Parsed references for document {id}: {json.dumps(references, indent=2)}")
+                    logger.info(
+                        f"Parsed references for document {id}: {json.dumps(references, indent=2)}"
+                    )
                 except json.JSONDecodeError:
                     logger.error(f"Failed to parse references JSON for document {id}: {references}")
                     references = {}
-            
+
             # Define asset type mappings
             asset_type_mappings = {
                 "http://schema.org/downloadUrl": "download",
                 "http://iiif.io/api/image": "iiif_image",
                 "http://iiif.io/api/presentation#manifest": "iiif_manifest",
                 "https://github.com/cogeotiff/cog-spec": "cog",
-                "https://github.com/protomaps/PMTiles": "pmtiles"
+                "https://github.com/protomaps/PMTiles": "pmtiles",
             }
-            
+
             # Check for each reference type
             for ref_type, asset_type_name in asset_type_mappings.items():
                 if ref_type in references:
                     ref_value = references[ref_type]
-                    logger.info(f"Found reference type {ref_type} with value {ref_value} for document {id}")
-                    
+                    logger.info(
+                        f"Found reference type {ref_type} with value {ref_value} for document {id}"
+                    )
+
                     # Handle both string and array values
                     if isinstance(ref_value, list) and ref_value:
                         # For arrays, take the first item for now
                         asset_path = ref_value[0]
                         asset_type = asset_type_name
-                        logger.info(f"Using first item from array: asset_path={asset_path}, asset_type={asset_type}")
+                        logger.info(
+                            f"Using first item from array: asset_path={asset_path}, asset_type={asset_type}"
+                        )
                         break
                     elif isinstance(ref_value, str) and ref_value:
                         asset_path = ref_value
                         asset_type = asset_type_name
-                        logger.info(f"Using string value: asset_path={asset_path}, asset_type={asset_type}")
+                        logger.info(
+                            f"Using string value: asset_path={asset_path}, asset_type={asset_type}"
+                        )
                         break
-            
+
             # If no specific asset type was found, use the document format as fallback
             if not asset_type:
                 asset_type = document.get("dc_format_s")
                 logger.info(f"No specific asset type found, using format fallback: {asset_type}")
 
-            logger.info(f"Final asset determination for document {id}: path={asset_path}, type={asset_type}")
+            logger.info(
+                f"Final asset determination for document {id}: path={asset_path}, type={asset_type}"
+            )
 
             # Trigger the summarization task
             summary_task = generate_item_summary.delay(
@@ -650,6 +660,7 @@ async def summarize_document(
             ocr_task = None
             if asset_path and asset_type:
                 from app.tasks.ocr import generate_item_ocr
+
                 ocr_task = generate_item_ocr.delay(
                     item_id=id, metadata=document, asset_path=asset_path, asset_type=asset_type
                 )
@@ -664,10 +675,7 @@ async def summarize_document(
             response_data = {
                 "status": "success",
                 "message": "Summary and OCR generation started",
-                "tasks": {
-                    "summary": summary_task.id,
-                    "ocr": ocr_task.id if ocr_task else None
-                }
+                "tasks": {"summary": summary_task.id, "ocr": ocr_task.id if ocr_task else None},
             }
 
             return create_response(response_data, callback)

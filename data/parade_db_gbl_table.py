@@ -97,11 +97,13 @@ CREATE TABLE IF NOT EXISTS geoblacklight_development (
 cursor.execute(create_table_query)
 conn.commit()
 
+
 # Function to convert pipe-delimited strings to arrays
 def convert_to_array(value):
     if pd.isna(value):
         return None
     return value.split("|")
+
 
 # Function to convert pipe-delimited strings to integer arrays
 def convert_to_int_array(value):
@@ -112,11 +114,13 @@ def convert_to_int_array(value):
     except (ValueError, AttributeError):
         return None
 
+
 # Function to handle NaN values
 def handle_nan(value):
     if pd.isna(value):
         return None
     return value
+
 
 # Function to convert string boolean values to actual booleans
 def convert_to_boolean(value):
@@ -125,6 +129,7 @@ def convert_to_boolean(value):
     if isinstance(value, str):
         return value.lower() == "true"
     return bool(value)
+
 
 # Define the insert query with ON CONFLICT to skip duplicates
 insert_query = """

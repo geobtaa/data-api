@@ -41,24 +41,26 @@ def generate_item_ocr(
     """Generate OCR text for a document."""
     logger.info(f"Starting OCR generation for item {item_id}")
     logger.info(f"Asset path: {asset_path}, Asset type: {asset_type}")
-    
+
     try:
         # Set up event loop for async operations
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         try:
             # Generate OCR text
-            ocr_text = loop.run_until_complete(_generate_ocr(item_id, metadata, asset_path, asset_type))
-            
+            ocr_text = loop.run_until_complete(
+                _generate_ocr(item_id, metadata, asset_path, asset_type)
+            )
+
             if not ocr_text:
                 logger.warning(f"No OCR text was generated for item {item_id}")
                 return {
                     "status": "error",
                     "message": "No OCR text was generated",
-                    "item_id": item_id
+                    "item_id": item_id,
                 }
-            
+
             # Store OCR text in database
             try:
                 store_ocr_in_db(item_id, ocr_text)
@@ -66,7 +68,7 @@ def generate_item_ocr(
                 return {
                     "status": "success",
                     "message": "OCR text generated and stored successfully",
-                    "item_id": item_id
+                    "item_id": item_id,
                 }
             except Exception as e:
                 logger.error(f"Error storing OCR text in database for item {item_id}: {str(e)}")
@@ -74,20 +76,16 @@ def generate_item_ocr(
                 return {
                     "status": "error",
                     "message": f"Error storing OCR text: {str(e)}",
-                    "item_id": item_id
+                    "item_id": item_id,
                 }
-                
+
         finally:
             loop.close()
-            
+
     except Exception as e:
         logger.error(f"Error generating OCR for item {item_id}: {str(e)}")
         logger.exception("Full traceback:")
-        return {
-            "status": "error",
-            "message": f"Error generating OCR: {str(e)}",
-            "item_id": item_id
-        }
+        return {"status": "error", "message": f"Error generating OCR: {str(e)}", "item_id": item_id}
 
 
 async def _generate_ocr(
@@ -148,9 +146,9 @@ async def process_asset_for_ocr(asset_path: str, asset_type: str) -> Optional[st
     """
     if not asset_path:
         return None
-        
+
     logger.info(f"Processing asset of type {asset_type} at {asset_path}")
-    
+
     try:
         if asset_type == "iiif_image":
             return await _process_iiif_image_ocr(asset_path)
@@ -171,20 +169,20 @@ async def _process_iiif_image_ocr(image_url: str) -> Optional[str]:
     try:
         # Remove /info.json from URL if present
         base_url = image_url.replace("/info.json", "")
-        
+
         # Get a full-size image for better OCR results
         image_url = f"{base_url}/full/full/0/default.jpg"
-        
+
         # Download the image
         response = requests.get(image_url, timeout=30)
         response.raise_for_status()
-        
+
         # Convert to PIL Image
         image = Image.open(io.BytesIO(response.content))
-        
+
         # Perform OCR
         ocr_text = pytesseract.image_to_string(image)
-        
+
         return ocr_text.strip()
     except Exception as e:
         logger.error(f"Error processing IIIF image OCR {image_url}: {str(e)}")
@@ -199,13 +197,13 @@ async def _process_iiif_manifest_ocr(manifest_url: str) -> Optional[str]:
         response = requests.get(manifest_url, timeout=30)
         response.raise_for_status()
         manifest = response.json()
-        
+
         # Log manifest structure for debugging
         logger.info(f"Manifest structure: {json.dumps(manifest, indent=2)}")
-        
+
         # Extract image URLs from the manifest
         image_urls = []
-        
+
         # Check sequences (IIIF 2.0)
         if manifest.get("sequences"):
             logger.info("Processing IIIF 2.0 manifest")
@@ -227,7 +225,7 @@ async def _process_iiif_manifest_ocr(manifest_url: str) -> Optional[str]:
                                 else:
                                     logger.warning(f"No service found for image {image_id}")
                                     image_urls.append(image_id)
-        
+
         # Check items (IIIF 3.0)
         elif manifest.get("items"):
             logger.info("Processing IIIF 3.0 manifest")
@@ -249,11 +247,11 @@ async def _process_iiif_manifest_ocr(manifest_url: str) -> Optional[str]:
                                 else:
                                     logger.warning(f"No service found for image {image_id}")
                                     image_urls.append(image_id)
-        
+
         if not image_urls:
             logger.warning(f"No images found in IIIF manifest {manifest_url}")
             return None
-        
+
         # Process each image
         ocr_texts = []
         for image_url in image_urls:
@@ -262,10 +260,10 @@ async def _process_iiif_manifest_ocr(manifest_url: str) -> Optional[str]:
                 # Download the image
                 image_response = requests.get(image_url, timeout=30)
                 image_response.raise_for_status()
-                
+
                 # Convert to PIL Image
                 image = Image.open(io.BytesIO(image_response.content))
-                
+
                 # Perform OCR
                 logger.info(f"Performing OCR on image {image_url}")
                 ocr_text = pytesseract.image_to_string(image)
@@ -281,11 +279,11 @@ async def _process_iiif_manifest_ocr(manifest_url: str) -> Optional[str]:
                 logger.error(f"Error processing image {image_url}: {str(e)}")
                 logger.exception("Full traceback:")
                 continue
-        
+
         if not ocr_texts:
             logger.warning("No OCR text was extracted from any images in the manifest")
             return None
-            
+
         return "\n\n".join(ocr_texts)
     except requests.exceptions.RequestException as e:
         logger.error(f"Error fetching IIIF manifest {manifest_url}: {str(e)}")
@@ -305,19 +303,21 @@ async def _process_download_ocr(download_url: str) -> Optional[str]:
         # Download the file
         response = requests.get(download_url, timeout=30)
         response.raise_for_status()
-        
+
         # Check if it's an image
         content_type = response.headers.get("content-type", "").lower()
         if not content_type.startswith("image/"):
-            logger.warning(f"Download URL {download_url} is not an image (content-type: {content_type})")
+            logger.warning(
+                f"Download URL {download_url} is not an image (content-type: {content_type})"
+            )
             return None
-        
+
         # Convert to PIL Image
         image = Image.open(io.BytesIO(response.content))
-        
+
         # Perform OCR
         ocr_text = pytesseract.image_to_string(image)
-        
+
         return ocr_text.strip()
     except Exception as e:
         logger.error(f"Error processing download OCR {download_url}: {str(e)}")
@@ -340,10 +340,7 @@ async def store_ocr_in_db(
         now = datetime.utcnow()
 
         # Create a structured response object
-        response_data = {
-            "ocr_text": ocr_text,
-            "timestamp": now.isoformat()
-        }
+        response_data = {"ocr_text": ocr_text, "timestamp": now.isoformat()}
 
         # Create the enrichment record
         enrichment_data = {
@@ -365,4 +362,4 @@ async def store_ocr_in_db(
 
     except Exception as e:
         logger.error(f"Error storing OCR text in database: {str(e)}")
-        raise 
+        raise

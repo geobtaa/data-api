@@ -27,7 +27,7 @@ Path(log_path).mkdir(parents=True, exist_ok=True)
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 # Add file handler for LLM service logs
-llm_log_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
+llm_log_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
 llm_log_handler.setFormatter(formatter)
 llm_log_handler.setLevel(logging.DEBUG)
 
@@ -47,6 +47,7 @@ logger.addHandler(console_handler)
 # Add a test log message to verify logging is working
 logger.info("LLM Service logger initialized")
 logger.debug("LLM Service debug logging enabled")
+
 
 class LLMService:
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
@@ -80,7 +81,7 @@ class LLMService:
         """
         # Construct the prompt
         prompt, output_parser = self._construct_summary_prompt(metadata, asset_content)
-        
+
         # Log the prompt and configuration
         logger.info(f"Generating summary with model {self.model}")
         logger.debug(f"Summary prompt: {prompt}")
@@ -93,7 +94,7 @@ class LLMService:
         # Log the API request configuration
         logger.debug(f"API URL: {self.api_url}")
         logger.debug(f"Request timeout: {timeout.total} seconds")
-        
+
         try:
             logger.info("Making API request to OpenAI")
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -109,19 +110,21 @@ class LLMService:
                     logger.debug(f"API Response status: {response.status}")
                     if response.status != 200:
                         error_text = await response.text()
-                        logger.error(f"API request failed with status {response.status}: {error_text}")
+                        logger.error(
+                            f"API request failed with status {response.status}: {error_text}"
+                        )
                         raise Exception(f"OpenAI API request failed: {error_text}")
-                    
+
                     response_data = await response.json()
                     logger.debug("Successfully received API response")
-                    
+
                     # Extract the summary from the response
                     summary = response_data["choices"][0]["message"]["content"].strip()
                     logger.info(f"Generated summary of length {len(summary)}")
                     logger.debug(f"Summary content: {summary}")
-                    
+
                     return summary, prompt, output_parser
-                    
+
         except asyncio.TimeoutError:
             logger.error("API request timed out after 60 seconds")
             raise
@@ -183,9 +186,9 @@ Keep the summary focused and brief."""
         """
         if not asset_path:
             return None
-            
+
         logger.info(f"Processing asset of type {asset_type} at {asset_path}")
-        
+
         try:
             if asset_type == "iiif_image":
                 return await self._process_iiif_image(asset_path)
@@ -204,7 +207,7 @@ Keep the summary focused and brief."""
         except Exception as e:
             logger.error(f"Error processing asset {asset_path} of type {asset_type}: {str(e)}")
             return None
-            
+
     async def _process_iiif_image(self, image_url: str) -> Optional[str]:
         """Process a IIIF image URL to extract metadata and visual content."""
         # TODO: Implement IIIF image processing
@@ -213,7 +216,7 @@ Keep the summary focused and brief."""
         # 2. Extracting metadata
         # 3. Potentially using OCR on the image
         return f"IIIF Image: {image_url}"
-        
+
     async def _process_iiif_manifest(self, manifest_url: str) -> Optional[str]:
         """Process a IIIF manifest to extract metadata and content."""
         # TODO: Implement IIIF manifest processing
@@ -222,7 +225,7 @@ Keep the summary focused and brief."""
         # 2. Extracting metadata, labels, descriptions
         # 3. Finding image resources within the manifest
         return f"IIIF Manifest: {manifest_url}"
-        
+
     async def _process_cog(self, cog_url: str) -> Optional[str]:
         """Process a Cloud Optimized GeoTIFF to extract metadata."""
         # TODO: Implement COG processing
@@ -230,7 +233,7 @@ Keep the summary focused and brief."""
         # 1. Reading COG metadata
         # 2. Extracting geospatial information
         return f"Cloud Optimized GeoTIFF: {cog_url}"
-        
+
     async def _process_pmtiles(self, pmtiles_url: str) -> Optional[str]:
         """Process a PMTiles asset to extract metadata."""
         # TODO: Implement PMTiles processing
@@ -238,7 +241,7 @@ Keep the summary focused and brief."""
         # 1. Reading PMTiles metadata
         # 2. Extracting tile information
         return f"PMTiles: {pmtiles_url}"
-        
+
     async def _process_download(self, download_url: str) -> Optional[str]:
         """Process a download URL to determine file type and extract content."""
         # TODO: Implement download processing
@@ -266,7 +269,7 @@ Keep the summary focused and brief."""
         """
         # Construct the prompt
         prompt, output_parser = self._construct_ocr_prompt(metadata, asset_content)
-        
+
         # Log the prompt and configuration
         logger.info(f"Generating OCR text with model {self.model}")
         logger.debug(f"OCR prompt: {prompt}")
@@ -279,7 +282,7 @@ Keep the summary focused and brief."""
         # Log the API request configuration
         logger.debug(f"API URL: {self.api_url}")
         logger.debug(f"Request timeout: {timeout.total} seconds")
-        
+
         request_body = {
             "model": self.model,
             "messages": [
@@ -304,7 +307,9 @@ Keep the summary focused and brief."""
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
-                        logger.error(f"API request failed with status {response.status}: {error_text}")
+                        logger.error(
+                            f"API request failed with status {response.status}: {error_text}"
+                        )
                         raise Exception(f"Failed to generate OCR text: {error_text}")
 
                     result = await response.json()
