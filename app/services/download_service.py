@@ -51,7 +51,8 @@ class IIIFDownloadService:
             downloads.append(
                 {
                     "label": f"{size_name.title()} Image",
-                    "url": f"{base_url}/full/{dimensions['width']},{dimensions['height']}/0/default.jpg",
+                    "url": (f"{base_url}/full/{dimensions['width']},"
+                            f"{dimensions['height']}/0/default.jpg"),
                     "type": "image/jpeg",
                 }
             )

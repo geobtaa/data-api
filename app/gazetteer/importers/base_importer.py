@@ -6,10 +6,11 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from db.config import DATABASE_URL
 from sqlalchemy import create_engine, insert, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+from db.config import DATABASE_URL
 
 logger = logging.getLogger(__name__)
 

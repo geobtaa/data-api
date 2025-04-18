@@ -210,7 +210,8 @@ class GeonamesImporter(BaseImporter):
                     progress = (i / total_chunks) * 100
                     records_per_sec = inserted / elapsed if elapsed > 0 else 0
                     self.logger.info(
-                        f"Progress: {progress:.1f}% - Inserted {inserted:,} of {len(cleaned_records):,} records ({records_per_sec:.1f} records/sec)"
+                        f"Progress: {progress:.1f}% - Inserted {inserted:,} of "
+                        f"{len(cleaned_records):,} records ({records_per_sec:.1f} records/sec)"
                     )
 
                 chunk_inserted = await self.bulk_insert(self.table, chunk)
@@ -220,7 +221,8 @@ class GeonamesImporter(BaseImporter):
             records_per_second = inserted / file_elapsed_time if file_elapsed_time > 0 else 0
 
             self.logger.info(
-                f"Inserted {inserted:,} records from {txt_file} in {file_elapsed_time:.2f} seconds ({records_per_second:.1f} records/sec)"
+                f"Inserted {inserted:,} records from {txt_file} in "
+                f"{file_elapsed_time:.2f} seconds ({records_per_second:.1f} records/sec)"
             )
             total_processed += inserted
 
@@ -237,7 +239,9 @@ class GeonamesImporter(BaseImporter):
         }
 
         self.logger.info(
-            f"Import completed. {total_processed:,} records processed, {skipped_records} records skipped in {elapsed_time:.2f} seconds ({result['records_per_second']:.1f} records/sec)"
+            f"Import completed. {total_processed:,} records processed, {skipped_records} "
+            f"records skipped in {elapsed_time:.2f} seconds "
+            f"({result['records_per_second']:.1f} records/sec)"
         )
 
         return result

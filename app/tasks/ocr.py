@@ -8,10 +8,11 @@ from typing import Any, Dict, Optional
 import pytesseract
 import requests
 from celery import shared_task
-from db.database import database
-from db.models import ai_enrichments
 from PIL import Image
 from sqlalchemy import insert
+
+from db.database import database
+from db.models import ai_enrichments
 
 logger = logging.getLogger(__name__)
 

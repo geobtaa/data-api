@@ -55,7 +55,8 @@ class LLMService:
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError(
-                "OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass it to the constructor."
+                "OpenAI API key is required. Set OPENAI_API_KEY environment variable "
+                "or pass it to the constructor."
             )
 
         # Use model from constructor, environment variable, or default to gpt-3.5-turbo
@@ -179,7 +180,8 @@ Keep the summary focused and brief."""
 
         Args:
             asset_path: Path to the asset file or URL
-            asset_type: Type of the asset (e.g., 'iiif_image', 'iiif_manifest', 'cog', 'pmtiles', 'download')
+            asset_type: Type of the asset (e.g., 'iiif_image', 'iiif_manifest', 'cog', 
+                        'pmtiles', 'download')
 
         Returns:
             Optional[str]: Extracted text content from the asset
@@ -288,7 +290,8 @@ Keep the summary focused and brief."""
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant that extracts text from historical maps and geographic datasets using OCR.",
+                    "content": "You are a helpful assistant that extracts text from "
+                    "historical maps and geographic datasets using OCR.",
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -317,12 +320,12 @@ Keep the summary focused and brief."""
                     logger.info(f"Successfully generated OCR text of length {len(ocr_text)}")
                     logger.debug(f"Generated OCR text: {ocr_text}")
                     return ocr_text, prompt, output_parser
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError as err:
                 logger.error("Timeout while generating OCR text with OpenAI API")
-                raise Exception("Timeout while generating OCR text with OpenAI API")
+                raise Exception("Timeout while generating OCR text with OpenAI API") from err
             except Exception as e:
                 logger.error(f"Error generating OCR text with OpenAI API: {str(e)}")
-                raise Exception(f"Error generating OCR text with OpenAI API: {str(e)}")
+                raise Exception(f"Error generating OCR text with OpenAI API: {str(e)}") from e
 
     def _construct_ocr_prompt(
         self, metadata: Dict[str, Any], asset_content: Optional[str] = None

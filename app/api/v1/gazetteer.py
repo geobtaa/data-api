@@ -2,6 +2,9 @@ import logging
 import os
 from typing import Optional
 
+from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import and_, func, or_, select
+
 from db.database import database
 from db.models import (
     gazetteer_btaa,
@@ -12,8 +15,6 @@ from db.models import (
     gazetteer_wof_names,
     gazetteer_wof_spr,
 )
-from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import and_, func, or_, select
 
 from ...services.cache_service import cached_endpoint
 
@@ -103,7 +104,7 @@ async def list_gazetteers():
         }
     except Exception as e:
         logger.error(f"Error listing gazetteers: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error listing gazetteers: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error listing gazetteers: {str(e)}") from e
 
 
 @router.get("/gazetteers/geonames")
@@ -257,7 +258,7 @@ async def search_geonames(
 
     except Exception as e:
         logger.error(f"Error searching GeoNames: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error searching GeoNames: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error searching GeoNames: {str(e)}") from e
 
 
 @router.get("/gazetteers/wof")
@@ -391,7 +392,10 @@ async def search_wof(
 
     except Exception as e:
         logger.error(f"Error searching Who's on First: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error searching Who's on First: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error searching Who's on First: {str(e)}"
+        ) from e
 
 
 @router.get("/gazetteers/wof/{wok_id}")
@@ -484,7 +488,7 @@ async def get_wof_details(wok_id: int):
         raise
     except Exception as e:
         logger.error(f"Error getting WOF details: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error getting WOF details: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting WOF details: {str(e)}") from e
 
 
 @router.get("/gazetteers/btaa")
@@ -595,7 +599,7 @@ async def search_btaa(
 
     except Exception as e:
         logger.error(f"Error searching BTAA: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error searching BTAA: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error searching BTAA: {str(e)}") from e
 
 
 @router.get("/gazetteers/search")
@@ -685,4 +689,7 @@ async def search_all_gazetteers(
 
     except Exception as e:
         logger.error(f"Error searching all gazetteers: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error searching all gazetteers: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error searching all gazetteers: {str(e)}"
+        ) from e

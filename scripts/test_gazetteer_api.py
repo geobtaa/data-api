@@ -40,9 +40,8 @@ def test_endpoints(base_url="http://localhost:8000/api/v1"):
     if response.status_code == 200:
         data = response.json()
         results = data.get("data", [])
-        print(
-            f"Success! Found {len(results)} results out of {data.get('meta', {}).get('total_count', 0)}"
-        )
+        total_count = data.get("meta", {}).get("total_count", 0)
+        print(f"Success! Found {len(results)} results out of {total_count}")
         if results:
             print("\nSample result:")
             print_json(results[0])
@@ -56,9 +55,8 @@ def test_endpoints(base_url="http://localhost:8000/api/v1"):
     if response.status_code == 200:
         data = response.json()
         results = data.get("data", [])
-        print(
-            f"Success! Found {len(results)} results out of {data.get('meta', {}).get('total_count', 0)}"
-        )
+        total_count = data.get("meta", {}).get("total_count", 0)
+        print(f"Success! Found {len(results)} results out of {total_count}")
         if results:
             print("\nSample result:")
             print_json(results[0])
@@ -98,9 +96,8 @@ def test_endpoints(base_url="http://localhost:8000/api/v1"):
     if response.status_code == 200:
         data = response.json()
         results = data.get("data", [])
-        print(
-            f"Success! Found {len(results)} results out of {data.get('meta', {}).get('total_count', 0)}"
-        )
+        total_count = data.get("meta", {}).get("total_count", 0)
+        print(f"Success! Found {len(results)} results out of {total_count}")
         if results:
             print("\nSample result:")
             print_json(results[0])
@@ -114,9 +111,8 @@ def test_endpoints(base_url="http://localhost:8000/api/v1"):
     if response.status_code == 200:
         data = response.json()
         results = data.get("data", [])
-        print(
-            f"Success! Found {len(results)} results out of {data.get('meta', {}).get('total_count', 0)}"
-        )
+        total_count = data.get("meta", {}).get("total_count", 0)
+        print(f"Success! Found {len(results)} results out of {total_count}")
         if results:
             # Group results by source
             by_source = {}

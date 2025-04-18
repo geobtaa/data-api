@@ -54,6 +54,7 @@ def test_field_types():
 
     for field, expected_type in field_types.items():
         assert field in INDEX_MAPPING["mappings"]["properties"], f"Missing field: {field}"
-        assert INDEX_MAPPING["mappings"]["properties"][field]["type"] == expected_type, (
-            f"Field {field} has type {INDEX_MAPPING['mappings']['properties'][field]['type']}, expected {expected_type}"
+        actual_type = INDEX_MAPPING["mappings"]["properties"][field]["type"]
+        assert actual_type == expected_type, (
+            f"Field {field} has type {actual_type}, expected {expected_type}"
         )

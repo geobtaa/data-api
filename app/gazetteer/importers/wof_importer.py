@@ -138,7 +138,8 @@ class WofImporter(BaseImporter):
                 # Handle missing name - set default value for not-null constraint
                 if record.get("name") is None or record.get("name") == "":
                     record["name"] = (
-                        f"Unnamed {record.get('placetype', 'place')} #{record.get('wok_id', 'unknown')}"
+                        f"Unnamed {record.get('placetype', 'place')} "
+                        f"#{record.get('wok_id', 'unknown')}"
                     )
                     self.logger.warning(
                         f"Found record with null name, using fallback: {record['name']}"
@@ -213,7 +214,8 @@ class WofImporter(BaseImporter):
                 # Check for required fields - skip record if ancestor_id is null
                 if record.get("ancestor_id") is None or record.get("ancestor_id") == "":
                     self.logger.warning(
-                        f"Skipping ancestor record for wok_id {record.get('wok_id')} due to null ancestor_id"
+                        f"Skipping ancestor record for wok_id {record.get('wok_id')} "
+                        f"due to null ancestor_id"
                     )
                     return None
 
@@ -250,7 +252,8 @@ class WofImporter(BaseImporter):
                 # Check for required fields - skip record if other_id is null
                 if record.get("other_id") is None or record.get("other_id") == "":
                     self.logger.warning(
-                        f"Skipping concordance record for wok_id {record.get('wok_id')} due to null other_id"
+                        f"Skipping concordance record for wok_id {record.get('wok_id')} "
+                        f"due to null other_id"
                     )
                     return None
 
@@ -279,7 +282,8 @@ class WofImporter(BaseImporter):
                 # Check for required fields - skip record if body is null
                 if record.get("body") is None or record.get("body") == "":
                     self.logger.warning(
-                        f"Skipping geojson record for wok_id {record.get('wok_id')} due to null body"
+                        f"Skipping geojson record for wok_id {record.get('wok_id')} "
+                        f"due to null body"
                     )
                     return None
 
@@ -431,7 +435,8 @@ class WofImporter(BaseImporter):
                 progress = (i / total_chunks) * 100
                 records_per_sec = inserted / elapsed if elapsed > 0 else 0
                 self.logger.info(
-                    f"{table_type} Progress: {progress:.1f}% - Inserted {inserted:,} of {len(cleaned_records):,} records ({records_per_sec:.1f} records/sec)"
+                    f"{table_type} Progress: {progress:.1f}% - Inserted {inserted:,} of "
+                    f"{len(cleaned_records):,} records ({records_per_sec:.1f} records/sec)"
                 )
 
             chunk_inserted = await self.bulk_insert(table, chunk)
@@ -441,7 +446,8 @@ class WofImporter(BaseImporter):
         records_per_second = inserted / file_elapsed_time if file_elapsed_time > 0 else 0
 
         self.logger.info(
-            f"Inserted {inserted:,} {table_type} records from {csv_file} in {file_elapsed_time:.2f} seconds ({records_per_second:.1f} records/sec)"
+            f"Inserted {inserted:,} {table_type} records from {csv_file} in "
+            f"{file_elapsed_time:.2f} seconds ({records_per_second:.1f} records/sec)"
         )
         total_processed += inserted
 
@@ -528,7 +534,8 @@ class WofImporter(BaseImporter):
         }
 
         self.logger.info(
-            f"WOF import completed. {total_records:,} records processed across {len(results)} tables in {elapsed_time:.2f} seconds"
+            f"WOF import completed. {total_records:,} records processed across "
+            f"{len(results)} tables in {elapsed_time:.2f} seconds"
         )
 
         return overall_result

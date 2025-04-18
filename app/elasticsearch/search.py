@@ -4,12 +4,12 @@ import os
 import time
 from urllib.parse import urlencode
 
-from db.database import database
-from db.models import geoblacklight_development
 from fastapi import HTTPException
 from sqlalchemy.sql import text
 
 from app.services.viewer_service import create_viewer_attributes  # Updated import
+from db.database import database
+from db.models import geoblacklight_development
 
 from .client import es
 
@@ -29,7 +29,8 @@ def get_search_criteria(query: str, fq: dict, skip: int, limit: int, sort: list 
 async def search_documents(
     query: str = None, fq: dict = None, skip: int = 0, limit: int = 20, sort: list = None
 ):
-    """Search documents in Elasticsearch with optional filters, sorting, and spelling suggestions."""
+    """Search documents in Elasticsearch with optional filters, sorting, and spelling suggestions.
+    """
     # Ensure limit is not zero to avoid division by zero errors
     if limit <= 0:
         limit = 20  # Default to 20 if limit is zero or negative
@@ -162,7 +163,7 @@ async def search_documents(
                 error_detail["info"] = es_error.info
             if hasattr(es_error, "status_code"):
                 error_detail["status_code"] = es_error.status_code
-            raise HTTPException(status_code=500, detail=error_detail)
+            raise HTTPException(status_code=500, detail=error_detail) from es_error
 
         logger.info(f"ES Response status: {response.meta.status}")
 
@@ -193,7 +194,9 @@ def get_sort_options(search_criteria):
             "id": "relevance",
             "attributes": {"label": "Relevance"},
             "links": {
-                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'relevance'}, doseq=True)}"
+                "self": (
+                    f"{base_url}?{urlencode({**current_params, 'sort': 'relevance'}, doseq=True)}"
+                )
             },
         },
         {
@@ -201,7 +204,9 @@ def get_sort_options(search_criteria):
             "id": "year_desc",
             "attributes": {"label": "Year (Newest first)"},
             "links": {
-                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'year_desc'}, doseq=True)}"
+                "self": (
+                    f"{base_url}?{urlencode({**current_params, 'sort': 'year_desc'}, doseq=True)}"
+                )
             },
         },
         {
@@ -209,7 +214,9 @@ def get_sort_options(search_criteria):
             "id": "year_asc",
             "attributes": {"label": "Year (Oldest first)"},
             "links": {
-                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'year_asc'}, doseq=True)}"
+                "self": (
+                    f"{base_url}?{urlencode({**current_params, 'sort': 'year_asc'}, doseq=True)}"
+                )
             },
         },
         {
@@ -217,7 +224,9 @@ def get_sort_options(search_criteria):
             "id": "title_asc",
             "attributes": {"label": "Title (A-Z)"},
             "links": {
-                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'title_asc'}, doseq=True)}"
+                "self": (
+                    f"{base_url}?{urlencode({**current_params, 'sort': 'title_asc'}, doseq=True)}"
+                )
             },
         },
         {
@@ -225,7 +234,9 @@ def get_sort_options(search_criteria):
             "id": "title_desc",
             "attributes": {"label": "Title (Z-A)"},
             "links": {
-                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'title_desc'}, doseq=True)}"
+                "self": (
+                    f"{base_url}?{urlencode({**current_params, 'sort': 'title_desc'}, doseq=True)}"
+                )
             },
         },
     ]
@@ -360,7 +371,7 @@ async def process_search_response(response, limit, skip, search_criteria):
         raise HTTPException(
             status_code=500,
             detail={"error": str(e), "traceback": error_trace, "response": response},
-        )
+        ) from e
 
 
 def process_aggregations(aggregations, search_criteria):

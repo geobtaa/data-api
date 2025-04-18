@@ -130,7 +130,8 @@ async def import_all(
     }
 
     logger.info(
-        f"All imports completed. {total_records} records processed across {len(results)} gazetteers in {elapsed_time:.2f} seconds"
+        f"All imports completed. {total_records} records processed across "
+        f"{len(results)} gazetteers in {elapsed_time:.2f} seconds"
     )
 
     return overall_result

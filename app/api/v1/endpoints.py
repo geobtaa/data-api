@@ -6,14 +6,14 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qs
 
-from db.database import database
-from db.models import geoblacklight_development
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import select
 
 from app.elasticsearch.index import reindex_documents
 from app.services.download_service import DownloadService
+from db.database import database
+from db.models import geoblacklight_development
 
 from ...elasticsearch import search_documents
 from ...elasticsearch.client import es
@@ -129,7 +129,8 @@ async def get_document_relationships(doc_id: str) -> Dict:
         relationships_query = """
             SELECT predicate, object_id, dct_title_s
             FROM document_relationships
-            JOIN geoblacklight_development ON geoblacklight_development.id = document_relationships.object_id
+            JOIN geoblacklight_development 
+            ON geoblacklight_development.id = document_relationships.object_id
             WHERE subject_id = :doc_id
             ORDER BY dct_title_s ASC
         """
@@ -272,11 +273,15 @@ async def search(
     q: Optional[str] = Query(None, description="Search query"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(10, ge=1, le=100, description="Results per page"),
-    sort: SortOption = Query(SortOption.RELEVANCE, description="Sort order"),
+    sort: Optional[SortOption] = None,
     callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
     """Search endpoint with caching support."""
     try:
+        # Set default sort option inside the function instead of in the parameter default
+        if sort is None:
+            sort = SortOption.RELEVANCE
+
         timings = {}
         cache_status = "miss"  # Default to cache miss for timing info
 
@@ -560,7 +565,7 @@ async def get_thumbnail(image_hash: str):
 
         raise HTTPException(status_code=404, detail="Image not found")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/documents/{id}/summarize")
@@ -632,7 +637,8 @@ async def summarize_document(
                         asset_path = ref_value[0]
                         asset_type = asset_type_name
                         logger.info(
-                            f"Using first item from array: asset_path={asset_path}, asset_type={asset_type}"
+                            f"Using first item from array: asset_path={asset_path}, "
+                            f"asset_type={asset_type}"
                         )
                         break
                     elif isinstance(ref_value, str) and ref_value:
@@ -684,7 +690,7 @@ async def summarize_document(
 
     except Exception as e:
         logger.error(f"Error triggering summary and OCR generation for document {id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/documents/{id}/summaries")
@@ -723,7 +729,7 @@ async def get_document_summaries(
 
     except Exception as e:
         logger.error(f"Error retrieving summaries for document {id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/reindex", response_model=dict)
@@ -744,4 +750,4 @@ async def reindex(callback: Optional[str] = Query(None, description="JSONP callb
         logger.error(f"Reindexing failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500, detail={"message": "Reindexing failed", "error": str(e)}
-        )
+        ) from e

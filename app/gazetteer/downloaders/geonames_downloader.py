@@ -120,7 +120,8 @@ def main():
     # Print result
     if result.get("status") == "success":
         logger.info(
-            f"GeoNames download completed successfully in {result.get('elapsed_time', 0):.2f} seconds"
+            f"GeoNames download completed successfully in "
+            f"{result.get('elapsed_time', 0):.2f} seconds"
         )
     else:
         logger.error(f"GeoNames download failed: {result.get('error', 'Unknown error')}")

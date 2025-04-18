@@ -90,7 +90,9 @@ class WofDownloader(BaseDownloader):
                             downloaded += len(chunk)
                             progress = downloaded / total_size * 100 if total_size > 0 else 0
                             sys.stdout.write(
-                                f"\rDownloading... {progress:.1f}% ({downloaded / (1024 * 1024):.1f}MB / {total_size / (1024 * 1024):.1f}MB)"
+                                f"\rDownloading... {progress:.1f}% "
+                                f"({downloaded / (1024 * 1024):.1f}MB / "
+                                f"{total_size / (1024 * 1024):.1f}MB)"
                             )
                             sys.stdout.flush()
 

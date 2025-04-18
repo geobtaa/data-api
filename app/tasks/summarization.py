@@ -7,11 +7,11 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from celery import shared_task
-from db.database import database
-from db.models import ai_enrichments
 from sqlalchemy import insert
 
 from app.services.llm_service import LLMService
+from db.database import database
+from db.models import ai_enrichments
 
 logger = logging.getLogger(__name__)
 
