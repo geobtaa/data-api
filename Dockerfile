@@ -1,12 +1,23 @@
-FROM python:3.13.1-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
+    g++ \
     python3-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    libpng-dev \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    gdal-bin \
+    libgdal-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Set GDAL version
+ENV GDAL_VERSION=3.4.1
 
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .

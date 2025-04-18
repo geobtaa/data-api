@@ -144,6 +144,41 @@ OPENAI_MODEL=gpt-3.5-turbo
 
 2. The summarization service will automatically use this API key to generate summaries.
 
+### Supported Asset Types
+
+The API can process various types of assets to enhance summaries:
+
+- **IIIF Images**: Extracts metadata and visual content from IIIF image services
+- **IIIF Manifests**: Processes IIIF manifests to extract metadata, labels, and descriptions
+- **Cloud Optimized GeoTIFFs (COG)**: Extracts geospatial metadata from COG files
+- **PMTiles**: Processes PMTiles assets to extract tile information
+- **Downloadable Files**: Processes various file types (Shapefiles, Geodatabases, etc.)
+
+### Generating Summaries
+
+To generate a summary for a document:
+
+```
+POST /api/v1/documents/{id}/summarize
+```
+
+This will trigger an asynchronous task to generate a summary. You can retrieve the summary using:
+
+```
+GET /api/v1/documents/{id}/summaries
+```
+
+### Future Enhancements
+
+The following AI features are planned:
+
+- Metadata summaries
+- Imagery summaries
+- Summaries for visually impaired users
+- OCR'd text extraction
+- Tabular data summaries
+- Subject enhancements
+
 ## Colophon
 
 ### Gazetteers
@@ -197,3 +232,10 @@ X = done; O = in progress
 - [X] Gazetteer - Who's on First
 - [ ] Gazetteer - USGS Geographic Names Information System (GNIS)
 - [ ] GeoJSONs
+- [ ] AI - Metadata summaries
+- [ ] AI - Imagery - Summary
+- [ ] AI - Imagery - Summary for visually impaired
+- [ ] AI - Imagery - OCR'd text
+- [ ] AI - Tabular data summaries
+- [ ] AI - Subject enhancements
+

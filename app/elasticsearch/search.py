@@ -94,9 +94,13 @@ async def search_documents(
                     "provider_agg": {"terms": {"field": "schema_provider_s"}},
                     "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
                     "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
-                },
-                "suggest": {
-                    "text": query,
+                }
+            }
+            
+            # Only add suggest if query is not empty
+            if search_criteria["query"].strip():
+                search_query["suggest"] = {
+                    "text": search_criteria["query"],
                     "simple_phrase": {
                         "phrase": {
                             "field": "dct_title_s",
@@ -109,8 +113,7 @@ async def search_documents(
                             "highlight": {"pre_tag": "<em>", "post_tag": "</em>"},
                         }
                     },
-                },
-            }
+                }
         else:
             search_query = {
                 "query": {"bool": {"must": [{"match_all": {}}], "filter": filter_clauses}},
@@ -129,39 +132,35 @@ async def search_documents(
                     "provider_agg": {"terms": {"field": "schema_provider_s"}},
                     "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
                     "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
-                },
-                "suggest": {
-                    "text": query,
-                    "simple_phrase": {
-                        "phrase": {
-                            "field": "dct_title_s",
-                            "size": 1,
-                            "gram_size": 3,
-                            "direct_generator": [
-                                {"field": "dct_title_s", "suggest_mode": "always"},
-                                {"field": "dct_description_sm", "suggest_mode": "always"},
-                            ],
-                            "highlight": {"pre_tag": "<em>", "post_tag": "</em>"},
-                        }
-                    },
-                },
+                }
             }
 
         logger.debug(f"ES Query: {json.dumps(search_query, indent=2)}")
 
         try:
-            response = await es.search(index=index_name, body=search_query)
+            response = await es.search(
+                index=index_name,
+                query=search_query["query"],
+                from_=skip,
+                size=limit,
+                sort=sort or [{"_score": "desc"}],
+                track_total_hits=True,
+                aggs=search_query["aggs"],
+                suggest=search_query.get("suggest")  # Only include suggest if it exists
+            )
         except Exception as es_error:
             logger.error(f"Elasticsearch error: {str(es_error)}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "message": "Elasticsearch query failed",
-                    "error": str(es_error),
-                    "query": search_query,
-                    "index": index_name,
-                },
-            )
+            error_detail = {
+                "message": "Elasticsearch query failed",
+                "error": str(es_error),
+                "query": search_query,
+                "index": index_name,
+            }
+            if hasattr(es_error, "info"):
+                error_detail["info"] = es_error.info
+            if hasattr(es_error, "status_code"):
+                error_detail["status_code"] = es_error.status_code
+            raise HTTPException(status_code=500, detail=error_detail)
 
         logger.info(f"ES Response status: {response.meta.status}")
 
@@ -234,16 +233,16 @@ def get_sort_options(search_criteria):
 async def process_search_response(response, limit, skip, search_criteria):
     """Process Elasticsearch response and format for API output."""
     try:
-        total_hits = response.body["hits"]["total"]["value"]
+        total_hits = response["hits"]["total"]["value"]
         logger.debug(f"Total hits: {total_hits}")
 
-        document_ids = [hit["_source"]["id"] for hit in response.body["hits"]["hits"]]
+        document_ids = [hit["_source"]["id"] for hit in response["hits"]["hits"]]
         logger.debug(f"Found document IDs: {document_ids}")
 
         # Process spelling suggestions
         suggestions = []
-        if "suggest" in response.body:
-            simple_phrase = response.body["suggest"].get("simple_phrase", [])
+        if "suggest" in response:
+            simple_phrase = response["suggest"].get("simple_phrase", [])
             for suggestion in simple_phrase:
                 if suggestion.get("options"):
                     for option in suggestion["options"]:
@@ -260,7 +259,7 @@ async def process_search_response(response, limit, skip, search_criteria):
             return {
                 "status": "success",
                 "query_time": {
-                    "elasticsearch": response.body["took"].__str__() + "ms",
+                    "elasticsearch": response["took"].__str__() + "ms",
                     "postgresql": "0ms",
                 },
                 "meta": {
@@ -307,7 +306,7 @@ async def process_search_response(response, limit, skip, search_criteria):
                     "id": doc["id"],
                     "score": next(
                         hit["_score"]
-                        for hit in response.body["hits"]["hits"]
+                        for hit in response["hits"]["hits"]
                         if hit["_source"]["id"] == doc["id"]
                     ),
                     "attributes": {**doc, **create_viewer_attributes(doc)},
@@ -317,14 +316,14 @@ async def process_search_response(response, limit, skip, search_criteria):
         pg_query_time = (time.time() - start_time) * 1000
 
         included = [
-            *process_aggregations(response.body.get("aggregations", {}), search_criteria),
+            *process_aggregations(response.get("aggregations", {}), search_criteria),
             *get_sort_options(search_criteria),
         ]
 
         return {
             "status": "success",
             "query_time": {
-                "elasticsearch": response.body["took"].__str__() + "ms",
+                "elasticsearch": response["took"].__str__() + "ms",
                 "postgresql": f"{round(pg_query_time)}ms",
             },
             "meta": {
@@ -355,10 +354,10 @@ async def process_search_response(response, limit, skip, search_criteria):
         error_trace = traceback.format_exc()
         logger.error(f"Process response error: {str(e)}", exc_info=True)
         logger.error(f"Full traceback:\n{error_trace}")
-        logger.error(f"Response body: {response.body}")
+        logger.error(f"Response body: {response}")
         raise HTTPException(
             status_code=500,
-            detail={"error": str(e), "traceback": error_trace, "response": response.body},
+            detail={"error": str(e), "traceback": error_trace, "response": response},
         )
 
 

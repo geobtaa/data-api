@@ -6,7 +6,14 @@ import redis
 import hashlib
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(os.path.join(os.getenv("LOG_PATH", "logs"), "app.log"), mode='a', encoding='utf-8')
+    ]
+)
 logger = logging.getLogger(__name__)
 
 # Setup Celery
@@ -14,7 +21,7 @@ celery_app = Celery(
     "tasks",
     broker=f"redis://{os.getenv('REDIS_HOST', 'redis')}:{os.getenv('REDIS_PORT', 6379)}/0",
     backend=f"redis://{os.getenv('REDIS_HOST', 'redis')}:{os.getenv('REDIS_PORT', 6379)}/0",
-    include=["app.tasks.worker", "app.tasks.summarization"],  # Include both task modules
+    include=["app.tasks.worker", "app.tasks.summarization", "app.tasks.ocr"],  # Include all task modules
 )
 
 # Configure Celery
@@ -24,6 +31,13 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    worker_hijack_root_logger=False,  # Don't let Celery hijack the root logger
+    worker_redirect_stdouts=False,  # Don't redirect stdout/stderr
+    task_track_started=True,  # Track when tasks are started
+    task_time_limit=300,  # 5 minute timeout for tasks
+    task_soft_time_limit=240,  # Soft timeout 4 minutes
+    worker_prefetch_multiplier=1,  # Process one task at a time
+    task_acks_late=True,  # Only acknowledge tasks after they complete
 )
 
 # Setup Redis for image storage

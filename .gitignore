@@ -161,8 +161,22 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+# Data
+
 # Gazetteer data
 data/gazetteers/**/*.csv
 data/gazetteers/**/*.txt
 data/gazetteers/**/*.db
 data/gazetteers/**/*.bz2
+
+# Elasticsearch data
+data/elasticsearch/*
+
+# Postgres data
+data/postgres/*
+
+# Redis data
+data/redis/*
+
+
+

@@ -30,12 +30,34 @@ cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup event
-    await database.connect()
-    await init_elasticsearch()
+    try:
+        await database.connect()
+        logger.info("Connected to database")
+    except Exception as e:
+        logger.error(f"Failed to connect to database: {str(e)}")
+        raise
+
+    try:
+        await init_elasticsearch()
+        logger.info("Connected to Elasticsearch")
+    except Exception as e:
+        logger.error(f"Failed to connect to Elasticsearch: {str(e)}")
+        # Don't raise the exception, allow the app to start without Elasticsearch
+
     yield
+
     # Shutdown event
-    await database.disconnect()
-    await close_elasticsearch()
+    try:
+        await database.disconnect()
+        logger.info("Disconnected from database")
+    except Exception as e:
+        logger.error(f"Error disconnecting from database: {str(e)}")
+
+    try:
+        await close_elasticsearch()
+        logger.info("Disconnected from Elasticsearch")
+    except Exception as e:
+        logger.error(f"Error disconnecting from Elasticsearch: {str(e)}")
 
 
 app = FastAPI(title="BTAA Geoportal API", version="0.1.0", lifespan=lifespan)

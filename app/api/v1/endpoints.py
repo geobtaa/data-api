@@ -568,12 +568,12 @@ async def summarize_document(
     callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
     """
-    Trigger the generation of a summary for a document.
+    Trigger the generation of a summary and OCR text for a document.
     This endpoint will:
     1. Fetch the document metadata
     2. Get the asset path and type
-    3. Trigger an asynchronous task to generate the summary
-    4. Return immediately with a task ID
+    3. Trigger asynchronous tasks to generate the summary and OCR text
+    4. Return immediately with task IDs
     """
     try:
         # Fetch the document
@@ -586,33 +586,94 @@ async def summarize_document(
 
             # Convert to dict
             document = dict(result)
+            logger.info(f"Processing document {id}")
+            logger.debug(f"Raw document data: {json.dumps(document, indent=2)}")
 
             # Get asset information
-            asset_path = (
-                document.get("attributes", {})
-                .get("dct_references_s", {})
-                .get("http://schema.org/downloadUrl")
-            )
-            asset_type = document.get("attributes", {}).get("dc_format_s")
+            asset_path = None
+            asset_type = None
+            
+            # Parse dct_references_s to identify candidate assets
+            references = document.get("dct_references_s", {})
+            logger.info(f"Raw references for document {id}: {references}")
+            
+            if isinstance(references, str):
+                try:
+                    references = json.loads(references)
+                    logger.info(f"Parsed references for document {id}: {json.dumps(references, indent=2)}")
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse references JSON for document {id}: {references}")
+                    references = {}
+            
+            # Define asset type mappings
+            asset_type_mappings = {
+                "http://schema.org/downloadUrl": "download",
+                "http://iiif.io/api/image": "iiif_image",
+                "http://iiif.io/api/presentation#manifest": "iiif_manifest",
+                "https://github.com/cogeotiff/cog-spec": "cog",
+                "https://github.com/protomaps/PMTiles": "pmtiles"
+            }
+            
+            # Check for each reference type
+            for ref_type, asset_type_name in asset_type_mappings.items():
+                if ref_type in references:
+                    ref_value = references[ref_type]
+                    logger.info(f"Found reference type {ref_type} with value {ref_value} for document {id}")
+                    
+                    # Handle both string and array values
+                    if isinstance(ref_value, list) and ref_value:
+                        # For arrays, take the first item for now
+                        asset_path = ref_value[0]
+                        asset_type = asset_type_name
+                        logger.info(f"Using first item from array: asset_path={asset_path}, asset_type={asset_type}")
+                        break
+                    elif isinstance(ref_value, str) and ref_value:
+                        asset_path = ref_value
+                        asset_type = asset_type_name
+                        logger.info(f"Using string value: asset_path={asset_path}, asset_type={asset_type}")
+                        break
+            
+            # If no specific asset type was found, use the document format as fallback
+            if not asset_type:
+                asset_type = document.get("dc_format_s")
+                logger.info(f"No specific asset type found, using format fallback: {asset_type}")
+
+            logger.info(f"Final asset determination for document {id}: path={asset_path}, type={asset_type}")
 
             # Trigger the summarization task
-            task = generate_item_summary.delay(
+            summary_task = generate_item_summary.delay(
                 item_id=id, metadata=document, asset_path=asset_path, asset_type=asset_type
             )
+            logger.info(f"Started summary task {summary_task.id} for document {id}")
+
+            # If we have an asset, also trigger OCR
+            ocr_task = None
+            if asset_path and asset_type:
+                from app.tasks.ocr import generate_item_ocr
+                ocr_task = generate_item_ocr.delay(
+                    item_id=id, metadata=document, asset_path=asset_path, asset_type=asset_type
+                )
+                logger.info(f"Started OCR task {ocr_task.id} for document {id}")
+            else:
+                logger.warning(f"No asset found for OCR processing on document {id}")
+                logger.debug(f"Missing: asset_path={asset_path}, asset_type={asset_type}")
 
             # Invalidate the document cache since we'll be updating it
             invalidate_cache_with_prefix(f"document:{id}")
 
             response_data = {
                 "status": "success",
-                "message": "Summary generation started",
-                "task_id": task.id,
+                "message": "Summary and OCR generation started",
+                "tasks": {
+                    "summary": summary_task.id,
+                    "ocr": ocr_task.id if ocr_task else None
+                }
             }
 
             return create_response(response_data, callback)
 
     except Exception as e:
-        logger.error(f"Error triggering summary generation for document {id}: {str(e)}")
+        logger.error(f"Error triggering summary and OCR generation for document {id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
