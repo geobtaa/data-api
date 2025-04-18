@@ -12,24 +12,57 @@ uv pip install -e '.[dev]'
 
 ## Running the Full Test Suite
 
-To run all tests, including linting with Black, code coverage with pytest-cov, and the pytest suite itself, you can use the provided Makefile:
+To run all tests, including linting with Ruff, code coverage with pytest-cov, and the pytest suite itself, you can use the provided Makefile:
+
+```bash
+make lint-test
+```
+
+This command will:
+1. Check code formatting and linting with Ruff
+2. Run the pytest suite with coverage reporting
+
+## Code Quality Tools
+
+The project uses Ruff for both linting and formatting:
+
+### Linting
+
+To check your code for issues without modifying files:
+
+```bash
+make lint
+```
+
+This runs Ruff's check command on the codebase.
+
+### Formatting
+
+To automatically format your code:
+
+```bash
+make format
+```
+
+This runs Ruff's format command and then applies any auto-fixes from the linter.
+
+### Format Checking (CI)
+
+To check if code is properly formatted without modifying files (useful for CI):
+
+```bash
+make lint-check
+```
+
+## Running Tests
+
+You can run the test suite using:
 
 ```bash
 make test
 ```
 
-Alternatively, you can run the commands individually:
-
-1.  **Linting (Black):** Checks and formats the code according to Black standards.
-    ```bash
-    black .
-    ```
-
-2.  **Run Tests with Coverage (pytest & pytest-cov):** Executes the test suite and reports code coverage.
-    ```bash
-    pytest
-    ```
-    *(Note: Coverage is configured in `pytest.ini` to run automatically with `pytest`)*
+This executes pytest with the configuration in `pytest.ini`, which includes automatic coverage reporting.
 
 ## Running Individual Tests
 
