@@ -1,11 +1,12 @@
-import os
-import logging
 import asyncio
-from typing import Dict, List, Any, Optional
+import logging
+import os
 from datetime import datetime
+from typing import Any, Dict, List
+
+from db.models import gazetteer_geonames
 
 from .base_importer import BaseImporter
-from db.models import gazetteer_geonames
 
 logger = logging.getLogger(__name__)
 

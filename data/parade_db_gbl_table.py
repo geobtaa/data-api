@@ -1,6 +1,7 @@
-import psycopg2
-import pandas as pd
 import os
+
+import pandas as pd
+import psycopg2
 from tqdm import tqdm
 
 # List available CSV files in the fixtures directory

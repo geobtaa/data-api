@@ -1,8 +1,7 @@
-from typing import Dict, List, Optional
 import json
 import logging
-import os
 from dataclasses import dataclass
+from typing import Dict, List, Optional
 from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
@@ -52,7 +51,7 @@ class IIIFDownloadService:
             downloads.append(
                 {
                     "label": f"{size_name.title()} Image",
-                    "url": f'{base_url}/full/{dimensions["width"]},{dimensions["height"]}/0/default.jpg',
+                    "url": f"{base_url}/full/{dimensions['width']},{dimensions['height']}/0/default.jpg",
                     "type": "image/jpeg",
                 }
             )
@@ -176,7 +175,7 @@ class DownloadService:
         if download_url := self.references.get("http://schema.org/downloadUrl"):
             downloads.append(
                 {
-                    "label": f'Download {self.document.get("dct_format_s", "File")}',
+                    "label": f"Download {self.document.get('dct_format_s', 'File')}",
                     "url": download_url,
                     "type": self.document.get("dct_format_s", "application/octet-stream").lower(),
                 }

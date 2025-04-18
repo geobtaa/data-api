@@ -1,13 +1,13 @@
-import json
-from typing import Optional, Dict, Any, Tuple
-import aiohttp
-from pydantic import BaseModel
-import os
-from dotenv import load_dotenv
 import asyncio
+import json
 import logging
+import os
 import sys
 from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
+
+import aiohttp
+from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()

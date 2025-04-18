@@ -18,14 +18,13 @@ Arguments:
     --all           Perform all operations in sequence
 """
 
+import argparse
+import logging
 import os
 import sys
 import zipfile
+
 import requests
-import logging
-import argparse
-from pathlib import Path
-from datetime import datetime
 
 # Fix imports to work both as a module and as a direct script
 try:

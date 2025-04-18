@@ -1,7 +1,7 @@
 import logging
-import asyncio
-from typing import List, Dict, Any, Optional
-from ..services.cache_service import CacheService, invalidate_cache_with_prefix, ENDPOINT_CACHE
+from typing import Any, Dict, List
+
+from ..services.cache_service import ENDPOINT_CACHE, invalidate_cache_with_prefix
 
 logger = logging.getLogger(__name__)
 

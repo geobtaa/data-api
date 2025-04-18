@@ -5,12 +5,10 @@ Base Downloader for Gazetteer Data
 This module provides a base class for gazetteer data downloaders to inherit from.
 """
 
-import os
-import sys
 import logging
-from pathlib import Path
-from datetime import datetime
 from abc import ABC, abstractmethod
+from datetime import datetime
+from pathlib import Path
 
 # Setup logging
 logging.basicConfig(

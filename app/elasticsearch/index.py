@@ -1,10 +1,11 @@
-from .client import es
-from db.database import database
-from db.models import geoblacklight_development, ai_enrichments
 import json
-import re
-import os
 import logging
+import os
+
+from db.database import database
+from db.models import geoblacklight_development
+
+from .client import es
 
 logger = logging.getLogger(__name__)
 

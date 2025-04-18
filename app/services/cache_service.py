@@ -1,11 +1,12 @@
-import os
-import json
-import redis.asyncio as redis
 import hashlib
-import logging
-from typing import Any, Optional, Dict, Callable
 import inspect
+import json
+import logging
+import os
 from functools import wraps
+from typing import Any, Optional
+
+import redis.asyncio as redis
 
 logger = logging.getLogger(__name__)
 

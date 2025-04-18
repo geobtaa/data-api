@@ -5,12 +5,10 @@ Test script for gazetteer API endpoints.
 This script makes requests to the gazetteer API endpoints to verify they're working correctly.
 """
 
-import requests
-import json
-import sys
-import os
-from datetime import datetime
 import argparse
+import json
+
+import requests
 
 
 def print_json(data):

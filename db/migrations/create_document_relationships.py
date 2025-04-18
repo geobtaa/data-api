@@ -1,9 +1,8 @@
-from sqlalchemy import Table, Column, String, Integer, MetaData, create_engine, inspect
-from sqlalchemy.schema import CreateTable
 import logging
-import os
 import sys
 from pathlib import Path
+
+from sqlalchemy import Column, Integer, MetaData, String, Table, create_engine, inspect
 from sqlalchemy.sql import text
 
 # Add the project root directory to Python path

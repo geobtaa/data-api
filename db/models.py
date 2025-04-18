@@ -1,17 +1,17 @@
 from sqlalchemy import (
-    Table,
-    Column,
-    String,
-    Text,
     ARRAY,
-    Boolean,
-    TIMESTAMP,
-    MetaData,
-    Integer,
-    BigInteger,
-    Numeric,
-    Date,
     JSON,
+    TIMESTAMP,
+    BigInteger,
+    Boolean,
+    Column,
+    Date,
+    Integer,
+    MetaData,
+    Numeric,
+    String,
+    Table,
+    Text,
 )
 
 metadata = MetaData()

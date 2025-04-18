@@ -1,10 +1,11 @@
-import pytest
 import os
-from elasticsearch import AsyncElasticsearch
-from app.elasticsearch.client import init_elasticsearch, close_elasticsearch
-from app.elasticsearch.mappings import INDEX_MAPPING
+
+import pytest
 import pytest_asyncio
+from app.elasticsearch.client import close_elasticsearch, init_elasticsearch
+from app.elasticsearch.mappings import INDEX_MAPPING
 from dotenv import load_dotenv
+from elasticsearch import AsyncElasticsearch
 
 # Load environment variables from .env file
 load_dotenv()

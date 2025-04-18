@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 
 # Add the app directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -54,6 +54,6 @@ def test_field_types():
 
     for field, expected_type in field_types.items():
         assert field in INDEX_MAPPING["mappings"]["properties"], f"Missing field: {field}"
-        assert (
-            INDEX_MAPPING["mappings"]["properties"][field]["type"] == expected_type
-        ), f"Field {field} has type {INDEX_MAPPING['mappings']['properties'][field]['type']}, expected {expected_type}"
+        assert INDEX_MAPPING["mappings"]["properties"][field]["type"] == expected_type, (
+            f"Field {field} has type {INDEX_MAPPING['mappings']['properties'][field]['type']}, expected {expected_type}"
+        )

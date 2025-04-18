@@ -8,21 +8,21 @@ This script runs all the gazetteer importers in sequence.
 - BTAA: Imports data from .csv files
 """
 
-import asyncio
-import logging
 import argparse
+import asyncio
 import json
-import sys
+import logging
 import os
+import sys
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
 # Add parent directory to path to import modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
+from app.gazetteer.importers.btaa_importer import BtaaImporter
 from app.gazetteer.importers.geonames_importer import GeonamesImporter
 from app.gazetteer.importers.wof_importer import WofImporter
-from app.gazetteer.importers.btaa_importer import BtaaImporter
 
 # Configure logging
 logging.basicConfig(

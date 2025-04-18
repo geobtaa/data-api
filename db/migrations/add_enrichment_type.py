@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Add debug information
@@ -10,10 +10,10 @@ print("Virtual environment:", os.environ.get("VIRTUAL_ENV"))
 # Add the project root directory to Python path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from sqlalchemy import Table, Column, String, MetaData, create_engine, inspect, text
 import logging
 
 from db.config import DATABASE_URL
+from sqlalchemy import create_engine, inspect, text
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

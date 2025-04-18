@@ -1,18 +1,19 @@
-import os
-import logging
 import asyncio
 import json
-from typing import Dict, List, Any, Optional
+import logging
+import os
 from datetime import datetime
+from typing import Any, Dict
 
-from .base_importer import BaseImporter
 from db.models import (
-    gazetteer_wof_spr,
     gazetteer_wof_ancestors,
     gazetteer_wof_concordances,
     gazetteer_wof_geojson,
     gazetteer_wof_names,
+    gazetteer_wof_spr,
 )
+
+from .base_importer import BaseImporter
 
 logger = logging.getLogger(__name__)
 

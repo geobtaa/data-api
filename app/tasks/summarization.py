@@ -1,16 +1,17 @@
-from typing import Optional, Dict, Any
-from celery import shared_task
-from app.services.llm_service import LLMService
-from app.services.image_service import ImageService
-import logging
+import asyncio
 import json
+import logging
+import os
+import time
 from datetime import datetime
+from typing import Any, Dict, Optional
+
+from celery import shared_task
 from db.database import database
 from db.models import ai_enrichments
 from sqlalchemy import insert
-import asyncio
-import time
-import os
+
+from app.services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 

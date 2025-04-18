@@ -20,16 +20,15 @@ Arguments:
     --all           Perform all operations in sequence
 """
 
-import os
-import sys
-import requests
-import sqlite3
-import csv
-import bz2
-import logging
 import argparse
-from pathlib import Path
-from datetime import datetime
+import bz2
+import csv
+import logging
+import os
+import sqlite3
+import sys
+
+import requests
 
 # Fix imports to work both as a module and as a direct script
 try:
@@ -91,7 +90,7 @@ class WofDownloader(BaseDownloader):
                             downloaded += len(chunk)
                             progress = downloaded / total_size * 100 if total_size > 0 else 0
                             sys.stdout.write(
-                                f"\rDownloading... {progress:.1f}% ({downloaded/(1024*1024):.1f}MB / {total_size/(1024*1024):.1f}MB)"
+                                f"\rDownloading... {progress:.1f}% ({downloaded / (1024 * 1024):.1f}MB / {total_size / (1024 * 1024):.1f}MB)"
                             )
                             sys.stdout.flush()
 

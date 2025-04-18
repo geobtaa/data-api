@@ -1,15 +1,14 @@
-import os
-import logging
-from typing import Dict, Optional
-import json
-import requests
-import aiohttp
-import asyncio
-import redis
-from datetime import timedelta
-from app.tasks.worker import fetch_and_cache_image
 import hashlib
+import json
+import logging
+import os
 import re
+from typing import Dict, Optional
+
+import redis
+import requests
+
+from app.tasks.worker import fetch_and_cache_image
 
 
 class ImageService:

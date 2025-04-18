@@ -1,24 +1,21 @@
-from sqlalchemy import (
-    Table,
-    Column,
-    String,
-    Text,
-    Integer,
-    BigInteger,
-    Numeric,
-    Date,
-    Boolean,
-    MetaData,
-    create_engine,
-    inspect,
-    ForeignKeyConstraint,
-    Index,
-)
-from sqlalchemy.schema import CreateTable
 import logging
-import os
 import sys
 from pathlib import Path
+
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Column,
+    Date,
+    Integer,
+    MetaData,
+    Numeric,
+    String,
+    Table,
+    Text,
+    create_engine,
+    inspect,
+)
 from sqlalchemy.sql import text
 
 # Add the project root directory to Python path

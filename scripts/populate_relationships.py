@@ -1,14 +1,15 @@
-from databases import Database
 import asyncio
 import logging
 import os
 import sys
 from pathlib import Path
 
+from databases import Database
+
 # Add the project root directory to Python path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from db.config import DATABASE_URL, ASYNC_DATABASE_URL
+from db.config import ASYNC_DATABASE_URL
 
 # Setup logging
 log_path = os.getenv("LOG_PATH", "logs")

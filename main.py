@@ -1,14 +1,15 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 import logging
+import os
 import sys
+from contextlib import asynccontextmanager
+
 from app.api.v1.endpoints import router as api_router
 from app.api.v1.gazetteer import router as gazetteer_router
-from app.elasticsearch import init_elasticsearch, close_elasticsearch
+from app.elasticsearch import close_elasticsearch, init_elasticsearch
 from db.database import database
-from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-import os
+from fastapi.responses import JSONResponse
 
 # Create logs directory if it doesn't exist
 os.makedirs("logs", exist_ok=True)

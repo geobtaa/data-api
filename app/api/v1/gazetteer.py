@@ -1,22 +1,21 @@
-from fastapi import APIRouter, HTTPException, Query, Request, BackgroundTasks
-from typing import Optional, Dict, List, Any
-from sqlalchemy import text, select, or_, and_, func
-import os
-import json
 import logging
-from datetime import datetime
-from ...services.cache_service import cached_endpoint
+import os
+from typing import Optional
 
 from db.database import database
 from db.models import (
+    gazetteer_btaa,
     gazetteer_geonames,
-    gazetteer_wof_spr,
     gazetteer_wof_ancestors,
     gazetteer_wof_concordances,
     gazetteer_wof_geojson,
     gazetteer_wof_names,
-    gazetteer_btaa,
+    gazetteer_wof_spr,
 )
+from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import and_, func, or_, select
+
+from ...services.cache_service import cached_endpoint
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

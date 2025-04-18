@@ -1,32 +1,34 @@
-from fastapi import APIRouter, HTTPException, Query, Request, BackgroundTasks
+import json
+import logging
+import os
+import time
+from datetime import datetime
+from typing import Any, Dict, Optional
+from urllib.parse import parse_qs
+
 from db.database import database
 from db.models import geoblacklight_development
-from sqlalchemy import select, func
-import json
-from ...elasticsearch import index_documents, search_documents
-from ...services.viewer_service import create_viewer_attributes
-from typing import Optional, Dict, List, Any, Union
-from urllib.parse import parse_qs
-from .shared import SortOption, SORT_MAPPINGS
-import os
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
+from fastapi.responses import JSONResponse, Response
+from sqlalchemy import select
+
+from app.elasticsearch.index import reindex_documents
+from app.services.download_service import DownloadService
+
+from ...elasticsearch import search_documents
 from ...elasticsearch.client import es
-from ...services.image_service import ImageService
-from ...services.citation_service import CitationService
 from ...services.cache_service import (
-    cached_endpoint,
-    CacheService,
     ENDPOINT_CACHE,
+    CacheService,
+    cached_endpoint,
     invalidate_cache_with_prefix,
 )
-from ...services.llm_service import LLMService
+from ...services.citation_service import CitationService
+from ...services.image_service import ImageService
+from ...services.viewer_service import create_viewer_attributes
 from ...tasks.summarization import generate_item_summary
-import logging
-import time
-from fastapi.responses import JSONResponse, Response
 from .jsonp import JSONPResponse
-from datetime import datetime
-from app.services.download_service import DownloadService
-from app.elasticsearch.index import reindex_documents
+from .shared import SORT_MAPPINGS, SortOption
 
 router = APIRouter()
 
@@ -363,7 +365,7 @@ async def search(
         return create_response(sanitized_results, callback)
 
     except Exception as e:
-        logger.error(f"Search endpoint error", exc_info=True)
+        logger.error("Search endpoint error", exc_info=True)
         error_response = {
             "message": "Search operation failed",
             "error": str(e),
@@ -494,7 +496,7 @@ async def suggest(
 async def clear_cache(
     cache_type: Optional[str] = Query(
         None, description="Type of cache to clear (search, document, suggest, all)"
-    )
+    ),
 ):
     """Clear specified cache or all cache if not specified."""
     if not ENDPOINT_CACHE:

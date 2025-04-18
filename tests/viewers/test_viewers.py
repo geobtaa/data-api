@@ -1,4 +1,3 @@
-import pytest
 from app.viewers import ItemViewer
 
 

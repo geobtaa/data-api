@@ -1,21 +1,20 @@
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+
 from sqlalchemy import (
-    Table,
+    JSON,
+    TIMESTAMP,
     Column,
-    String,
     Integer,
     MetaData,
+    String,
+    Table,
     create_engine,
     inspect,
-    TIMESTAMP,
-    JSON,
 )
-from sqlalchemy.schema import CreateTable
-import logging
-import os
-import sys
-from pathlib import Path
 from sqlalchemy.sql import text
-from datetime import datetime
 
 # Add the project root directory to Python path
 sys.path.append(str(Path(__file__).parent.parent.parent))

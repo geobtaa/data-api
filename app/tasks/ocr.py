@@ -1,18 +1,17 @@
-from typing import Optional, Dict, Any
-from celery import shared_task
-import logging
+import asyncio
+import io
 import json
+import logging
 from datetime import datetime
+from typing import Any, Dict, Optional
+
+import pytesseract
+import requests
+from celery import shared_task
 from db.database import database
 from db.models import ai_enrichments
-from sqlalchemy import insert
-import asyncio
-import time
-import os
-import requests
-import pytesseract
 from PIL import Image
-import io
+from sqlalchemy import insert
 
 logger = logging.getLogger(__name__)
 

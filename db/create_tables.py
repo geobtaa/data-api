@@ -1,7 +1,9 @@
-from sqlalchemy import create_engine
-from db.models import metadata
 import os
+
 from dotenv import load_dotenv
+from sqlalchemy import create_engine
+
+from db.models import metadata
 
 # Load environment variables
 load_dotenv()

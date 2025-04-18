@@ -1,17 +1,15 @@
-import os
 import csv
 import logging
+import os
 import sys
-from sqlalchemy import create_engine, insert, delete, text
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from datetime import datetime
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Union
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from db.config import DATABASE_URL
+from sqlalchemy import create_engine, insert, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,10 @@
-from celery import Celery
-import os
-import requests
-import logging
-import redis
 import hashlib
+import logging
+import os
+
+import redis
+import requests
+from celery import Celery
 
 # Setup logging
 logging.basicConfig(

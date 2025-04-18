@@ -1,7 +1,8 @@
-from elasticsearch import AsyncElasticsearch
-from dotenv import load_dotenv
-import os
 import logging
+import os
+
+from dotenv import load_dotenv
+from elasticsearch import AsyncElasticsearch
 
 load_dotenv()
 

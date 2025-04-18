@@ -1,15 +1,17 @@
-from fastapi import HTTPException
-from .client import es
-from db.database import database
-from db.models import geoblacklight_development
-from app.services.viewer_service import create_viewer_attributes  # Updated import
-import os
-import time
-from sqlalchemy.sql import text
-from urllib.parse import urlencode
-from app.services.image_service import ImageService
 import json
 import logging
+import os
+import time
+from urllib.parse import urlencode
+
+from db.database import database
+from db.models import geoblacklight_development
+from fastapi import HTTPException
+from sqlalchemy.sql import text
+
+from app.services.viewer_service import create_viewer_attributes  # Updated import
+
+from .client import es
 
 logger = logging.getLogger(__name__)
 
@@ -266,7 +268,7 @@ async def process_search_response(response, limit, skip, search_criteria):
                     "pages": {
                         "current_page": (skip // limit) + 1,
                         "next_page": None,
-                        "prev_page": ((skip // limit)) if skip > 0 else None,
+                        "prev_page": (skip // limit) if skip > 0 else None,
                         "total_pages": 0,
                         "limit_value": limit,
                         "offset_value": skip,
@@ -330,7 +332,7 @@ async def process_search_response(response, limit, skip, search_criteria):
                 "pages": {
                     "current_page": (skip // limit) + 1,
                     "next_page": ((skip // limit) + 2) if (skip + limit) < total_hits else None,
-                    "prev_page": ((skip // limit)) if skip > 0 else None,
+                    "prev_page": (skip // limit) if skip > 0 else None,
                     "total_pages": (
                         (total_hits // limit) + (1 if total_hits % limit > 0 else 0)
                         if limit > 0
