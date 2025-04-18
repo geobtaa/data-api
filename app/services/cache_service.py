@@ -164,11 +164,17 @@ def cached_endpoint(ttl=DEFAULT_CACHE_TTL):
 
             # Cache miss, execute the function
             logger.debug(f"Cache miss for {cache_key}")
-            result = await func(*args, **kwargs)
-
-            # Cache the result
-            await cache_service.set(cache_key, result, ttl)
-            return result
+            try:
+                result = await func(*args, **kwargs)
+                # Only cache successful responses (status code 200)
+                if isinstance(result, dict) or (
+                    hasattr(result, "status_code") and result.status_code == 200
+                ):
+                    await cache_service.set(cache_key, result, ttl)
+                return result
+            except Exception as e:
+                # Don't cache errors, just re-raise them
+                raise
 
         return wrapper
 

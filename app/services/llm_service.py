@@ -180,7 +180,7 @@ Keep the summary focused and brief."""
 
         Args:
             asset_path: Path to the asset file or URL
-            asset_type: Type of the asset (e.g., 'iiif_image', 'iiif_manifest', 'cog', 
+            asset_type: Type of the asset (e.g., 'iiif_image', 'iiif_manifest', 'cog',
                         'pmtiles', 'download')
 
         Returns:

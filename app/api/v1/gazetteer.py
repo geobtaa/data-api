@@ -393,8 +393,7 @@ async def search_wof(
     except Exception as e:
         logger.error(f"Error searching Who's on First: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500, 
-            detail=f"Error searching Who's on First: {str(e)}"
+            status_code=500, detail=f"Error searching Who's on First: {str(e)}"
         ) from e
 
 
@@ -690,6 +689,5 @@ async def search_all_gazetteers(
     except Exception as e:
         logger.error(f"Error searching all gazetteers: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500, 
-            detail=f"Error searching all gazetteers: {str(e)}"
+            status_code=500, detail=f"Error searching all gazetteers: {str(e)}"
         ) from e

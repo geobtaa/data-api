@@ -43,6 +43,26 @@ SUGGEST_CACHE_TTL = int(os.getenv("SUGGEST_CACHE_TTL", 7200))  # 2 hours
 LIST_CACHE_TTL = int(os.getenv("LIST_CACHE_TTL", 43200))  # 12 hours
 
 
+@router.get("")
+async def api_root():
+    """Return basic API information including version."""
+    return JSONResponse(
+        content={
+            "api": "BTAA Geoportal API",
+            "version": "0.1.0",
+            "description": "API for accessing geospatial data from the Big Ten Academic Alliance Geoportal",
+            "endpoints": [
+                "/documents",
+                "/search",
+                "/suggest",
+                "/thumbnails",
+                "/cache/clear",
+                "/reindex"
+            ]
+        }
+    )
+
+
 def add_thumbnail_url(document: Dict) -> Dict:
     """Add the ui_thumbnail_url to the document attributes."""
     # Ensure 'attributes' key exists
@@ -81,13 +101,18 @@ def sanitize_for_json(obj: Any) -> Any:
     return obj
 
 
-def create_response(content: Dict, callback: Optional[str] = None) -> JSONResponse:
+def create_response(content: Dict | JSONResponse, callback: Optional[str] = None, status_code: int = 200) -> JSONResponse:
     """Create either a JSON or JSONP response based on callback parameter."""
+    # If content is already a JSONResponse, return it as is
+    if isinstance(content, JSONResponse):
+        return content
+
     # Sanitize content before serialization
     sanitized_content = sanitize_for_json(content)
+    
     if callback:
-        return JSONPResponse(content=sanitized_content, callback=callback)
-    return JSONResponse(content=sanitized_content)
+        return JSONPResponse(content=sanitized_content, callback=callback, status_code=status_code)
+    return JSONResponse(content=sanitized_content, status_code=status_code)
 
 
 def add_ui_attributes(doc: Dict) -> Dict:
@@ -219,10 +244,12 @@ async def get_document(
         logger.info(f"Final response structure: {response}")  # Debug line
         return create_response(response, callback)
 
+    except HTTPException:
+        # Re-raise HTTPException to be handled by FastAPI's exception handler
+        raise
     except Exception as e:
         logger.error(f"Document fetch failed: {e}", exc_info=True)
-        error_response = {"message": "Document fetch failed", "error": str(e)}
-        return create_response(error_response, callback)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/documents/")

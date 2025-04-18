@@ -29,8 +29,8 @@ def get_search_criteria(query: str, fq: dict, skip: int, limit: int, sort: list 
 async def search_documents(
     query: str = None, fq: dict = None, skip: int = 0, limit: int = 20, sort: list = None
 ):
-    """Search documents in Elasticsearch with optional filters, sorting, and spelling suggestions.
-    """
+    """Search documents in Elasticsearch with optional filters, sorting, and spelling 
+    suggestions."""
     # Ensure limit is not zero to avoid division by zero errors
     if limit <= 0:
         limit = 20  # Default to 20 if limit is zero or negative
