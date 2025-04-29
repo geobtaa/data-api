@@ -57,8 +57,8 @@ async def api_root():
                 "/suggest",
                 "/thumbnails",
                 "/cache/clear",
-                "/reindex"
-            ]
+                "/reindex",
+            ],
         }
     )
 
@@ -101,7 +101,9 @@ def sanitize_for_json(obj: Any) -> Any:
     return obj
 
 
-def create_response(content: Dict | JSONResponse, callback: Optional[str] = None, status_code: int = 200) -> JSONResponse:
+def create_response(
+    content: Dict | JSONResponse, callback: Optional[str] = None, status_code: int = 200
+) -> JSONResponse:
     """Create either a JSON or JSONP response based on callback parameter."""
     # If content is already a JSONResponse, return it as is
     if isinstance(content, JSONResponse):
@@ -109,7 +111,7 @@ def create_response(content: Dict | JSONResponse, callback: Optional[str] = None
 
     # Sanitize content before serialization
     sanitized_content = sanitize_for_json(content)
-    
+
     if callback:
         return JSONPResponse(content=sanitized_content, callback=callback, status_code=status_code)
     return JSONResponse(content=sanitized_content, status_code=status_code)
@@ -582,17 +584,17 @@ async def get_thumbnail(image_hash: str):
         # Create service without document (we only need cache access)
         image_service = ImageService({})
         image_data = await image_service.get_cached_image(image_hash)
-
-        if image_data:
-            return Response(
-                content=image_data,
-                media_type="image/jpeg",
-                headers={"Cache-Control": "public, max-age=31536000"},  # Cache for 1 year
-            )
-
-        raise HTTPException(status_code=404, detail="Image not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+    if not image_data:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    return Response(
+        content=image_data,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=31536000"},  # Cache for 1 year
+    )
 
 
 @router.post("/documents/{id}/summarize")

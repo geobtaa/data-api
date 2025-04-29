@@ -2,15 +2,27 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
 
 from app.main import app
+from db.database import database
 
 
 @pytest.fixture
 def client():
     """Return a FastAPI test client."""
     return TestClient(app)
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def setup_database():
+    """Initialize database connection for tests."""
+    try:
+        await database.connect()
+        yield
+    finally:
+        await database.disconnect()
 
 
 @pytest.fixture

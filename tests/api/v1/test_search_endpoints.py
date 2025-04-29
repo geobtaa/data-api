@@ -166,7 +166,12 @@ async def test_suggest_endpoint(mock_es_search, mock_suggest_response):
     # Setup mock
     mock_search_instance = MagicMock()
     mock_search_instance.body = mock_suggest_response
-    mock_es_search.return_value = mock_search_instance
+    
+    # Create an async mock that returns the mock_search_instance
+    async def async_mock_search(*args, **kwargs):
+        return mock_search_instance
+    
+    mock_es_search.side_effect = async_mock_search
 
     # Call endpoint
     response = client.get("/api/v1/suggest?q=min")

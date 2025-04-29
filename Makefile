@@ -20,7 +20,7 @@ lint-check:
 # Run just the tests
 test:
 	@echo "Running tests..."
-	pytest
+	pytest --full-trace
 
 # Run linting and then tests (for CI)
 lint-test: lint-check test 

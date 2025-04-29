@@ -3,7 +3,7 @@ import os
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -83,14 +83,14 @@ app.include_router(gazetteer_router, prefix="/api/v1")
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Global exception handler caught: {str(exc)}", exc_info=True)
-    
+
     # Handle HTTPException separately to preserve its status code and detail
     if isinstance(exc, HTTPException):
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail},
         )
-    
+
     # Handle all other exceptions
     return JSONResponse(
         status_code=500,

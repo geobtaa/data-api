@@ -1,4 +1,5 @@
 from unittest.mock import patch
+from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -30,7 +31,7 @@ def mock_geonames_record():
         "elevation": 200,
         "dem": 200,
         "timezone": "America/Chicago",
-        "modification_date": "2023-01-01",
+        "modification_date": datetime(2023, 1, 1),
     }
 
 

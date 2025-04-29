@@ -172,7 +172,7 @@ def cached_endpoint(ttl=DEFAULT_CACHE_TTL):
                 ):
                     await cache_service.set(cache_key, result, ttl)
                 return result
-            except Exception as e:
+            except Exception:
                 # Don't cache errors, just re-raise them
                 raise
 

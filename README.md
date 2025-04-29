@@ -197,8 +197,6 @@ Data from Who's On First. [License](https://whosonfirst.org/docs/licenses/)
 
 ## TODO
 
-X = done; O = in progress
-
 - [X] Docker Image - Published on Docker Hub
 - [X] Search - basic search across all text fields
 - [X] Search - autocomplete

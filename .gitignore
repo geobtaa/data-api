@@ -123,6 +123,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.test
 .venv
 env/
 venv/
@@ -174,9 +175,11 @@ data/elasticsearch/*
 
 # Postgres data
 data/postgres/*
+data/postgres_test/*
 
 # Redis data
 data/redis/*
+
 
 
 
