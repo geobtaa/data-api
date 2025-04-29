@@ -174,9 +174,8 @@ The following AI features are planned:
 
 - Metadata summaries
 - Imagery summaries
-- Summaries for visually impaired users
-- OCR'd text extraction
 - Tabular data summaries
+- OCR text extraction
 - Subject enhancements
 
 ## Colophon
@@ -231,6 +230,7 @@ Data from Who's On First. [License](https://whosonfirst.org/docs/licenses/)
 - [ ] Item View - similar images (vector imagery search)
 - [X] Gazetteer - BTAA Spatial
 - [X] Gazetteer - Geonames
+- [X] Gazetteer - OCLC Fast (Geographic)
 - [X] Gazetteer - Who's on First
 - [ ] Gazetteer - USGS Geographic Names Information System (GNIS)
 - [ ] GeoJSONs
