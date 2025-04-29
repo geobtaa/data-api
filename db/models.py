@@ -207,6 +207,24 @@ gazetteer_btaa = Table(
     Column("updated_at", TIMESTAMP),
 )
 
+# FAST gazetteer
+# Data source: OCLC ResearchWorks (https://researchworks.oclc.org/researchdata/fast/)
+# Attribution: OCLC FAST data is provided by OCLC under the OCLC ResearchWorks license.
+gazetteer_fast = Table(
+    "gazetteer_fast",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("fast_id", String, nullable=False, unique=True, index=True),
+    Column("uri", String, nullable=False),
+    Column("type", String, nullable=False),
+    Column("label", String, nullable=False),
+    Column("geoname_id", String),
+    Column("viaf_id", String),
+    Column("wikipedia_id", String),
+    Column("created_at", TIMESTAMP),
+    Column("updated_at", TIMESTAMP),
+)
+
 # AI Enrichments table
 ai_enrichments = Table(
     "ai_enrichments",

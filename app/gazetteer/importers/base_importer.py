@@ -230,7 +230,14 @@ class BaseImporter:
                 self.logger.error("Async database URL not configured")
                 return 0
 
-            async_engine = create_async_engine(self.async_database_url)
+            # Create a connection pool with a limited number of connections
+            async_engine = create_async_engine(
+                self.async_database_url,
+                pool_size=5,  # Limit the number of connections in the pool
+                max_overflow=10,  # Allow some overflow connections
+                pool_timeout=30,  # Timeout for getting a connection from the pool
+                pool_recycle=1800,  # Recycle connections after 30 minutes
+            )
 
             @asynccontextmanager
             async def get_session():
@@ -249,6 +256,8 @@ class BaseImporter:
                     await session.execute(stmt)
                     count += len(chunk)
 
+            # Properly dispose of the engine to close all connections
+            await async_engine.dispose()
             return count
 
         except Exception as e:

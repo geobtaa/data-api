@@ -12,6 +12,7 @@ Currently supported gazetteers:
 - Who's on First (WOF)
 - GeoNames
 - BTAA Geoportal
+- OCLC FAST Geographic (FAST)
 
 ## Prerequisites
 
@@ -32,6 +33,7 @@ data/
       csv/            # Exported CSV files
     geonames/         # GeoNames data
     btaa/             # BTAA Geoportal data
+    fast/             # OCLC FAST Geographic data
 ```
 
 ## Downloading Data
@@ -54,6 +56,7 @@ Where `[gazetteer_name]` can be:
 - `wof` - Who's on First
 - `geonames` - GeoNames
 - `btaa` - BTAA Geoportal
+- `fast` - FAST (Faceted Application of Subject Terminology)
 
 ### Gazetteer-Specific Notes
 
@@ -73,6 +76,11 @@ Where `[gazetteer_name]` can be:
 #### BTAA Geoportal
 1. Downloads BTAA Geoportal data
 2. Processes it into the required format
+
+#### FAST (Faceted Application of Subject Terminology)
+1. Downloads the FAST Geographic MARCXML dataset
+2. Extracts the MARCXML file from the ZIP archive
+3. Stores the MARCXML file in the data directory for processing by the importer
 
 ## Importing Data
 
@@ -94,6 +102,7 @@ Where `[gazetteer_name]` can be:
 - `wof` - Who's on First
 - `geonames` - GeoNames
 - `btaa` - BTAA Geoportal
+- `fast` - FAST (Faceted Application of Subject Terminology)
 
 ### Import Process
 
@@ -119,6 +128,17 @@ For each gazetteer:
 - Uses a chunk size of 2000 for optimal performance
 - Handles BTAA-specific data formats and fields
 
+#### FAST (Faceted Application of Subject Terminology)
+- Parses the MARCXML file using a SAX parser for efficient memory usage
+- Extracts geographic entries with their associated metadata
+- Processes the following fields:
+  - FAST ID (from 016_7_a field)
+  - URI (from 024_7_a field)
+  - Label (from 151 field)
+  - GeoNames ID (from 751_4_0 field, if available)
+- Uses a chunk size of 1000 for optimal performance
+- Exports processed data to CSV for verification before database import
+
 ## Troubleshooting
 
 ### Common Issues
@@ -139,6 +159,11 @@ For each gazetteer:
    - The importers log detailed error messages
    - Check the console output for specific error information
    - Look for warnings about data validation or conversion issues
+
+5. MARCXML Parsing Issues (FAST)
+   - Error: "Error parsing MARCXML file"
+   - Solution: Check if the MARCXML file was downloaded correctly and is not corrupted
+   - Verify that the file contains the expected fields and structure
 
 ## Monitoring Progress
 
