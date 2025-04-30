@@ -24,11 +24,6 @@ celery_app = Celery(
     "tasks",
     broker=f"redis://{os.getenv('REDIS_HOST', 'redis')}:{os.getenv('REDIS_PORT', 6379)}/0",
     backend=f"redis://{os.getenv('REDIS_HOST', 'redis')}:{os.getenv('REDIS_PORT', 6379)}/0",
-    include=[
-        "app.tasks.worker",
-        "app.tasks.summarization",
-        "app.tasks.ocr",
-    ],  # Include all task modules
 )
 
 # Configure Celery
@@ -45,6 +40,12 @@ celery_app.conf.update(
     task_soft_time_limit=240,  # Soft timeout 4 minutes
     worker_prefetch_multiplier=1,  # Process one task at a time
     task_acks_late=True,  # Only acknowledge tasks after they complete
+    imports=[
+        "app.tasks.worker",
+        "app.tasks.entities",
+        "app.tasks.summarization",
+        "app.tasks.ocr",
+    ],
 )
 
 # Setup Redis for image storage

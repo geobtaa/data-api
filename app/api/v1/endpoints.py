@@ -27,6 +27,8 @@ from ...services.citation_service import CitationService
 from ...services.image_service import ImageService
 from ...services.viewer_service import create_viewer_attributes
 from ...tasks.summarization import generate_item_summary
+from ...tasks.entities import generate_geo_entities
+from ...tasks.ocr import generate_item_ocr
 from .jsonp import JSONPResponse
 from .shared import SORT_MAPPINGS, SortOption
 
@@ -790,3 +792,163 @@ async def reindex(callback: Optional[str] = Query(None, description="JSONP callb
         raise HTTPException(
             status_code=500, detail={"message": "Reindexing failed", "error": str(e)}
         ) from e
+
+
+@router.post("/documents/{id}/identify-geo-entities")
+async def identify_geo_entities(
+    id: str,
+    background_tasks: BackgroundTasks,
+    callback: Optional[str] = Query(None, description="JSONP callback name"),
+):
+    """
+    Trigger the identification of geographic entities in a document.
+    This endpoint will:
+    1. Fetch the document metadata
+    2. Trigger an asynchronous task to identify geographic entities
+    3. Return immediately with task ID
+    """
+    try:
+        # Fetch the document
+        async with database.transaction():
+            query = select(geoblacklight_development).where(geoblacklight_development.c.id == id)
+            result = await database.fetch_one(query)
+
+            if not result:
+                raise HTTPException(status_code=404, detail="Document not found")
+
+            # Convert to dict and handle datetime serialization
+            document = dict(result)
+            for key, value in document.items():
+                if isinstance(value, datetime):
+                    document[key] = value.isoformat()
+
+            logger.info(f"Processing document {id} for geographic entity identification")
+            logger.debug(f"Raw document data: {json.dumps(document, indent=2)}")
+
+
+            # Trigger the geographic entity identification task
+            geo_entities_task = generate_geo_entities.delay(
+                item_id=id, metadata=document
+            )
+            logger.info(f"Started geographic entity identification task {geo_entities_task.id} for document {id}")
+
+            # Invalidate the document cache since we'll be updating it
+            invalidate_cache_with_prefix(f"document:{id}")
+
+            # Create response data
+            response_data = {
+                "status": "success",
+                "message": "Geographic entity identification started",
+                "task_id": geo_entities_task.id
+            }
+
+            return create_response(response_data, callback)
+
+    except Exception as e:
+        logger.error(f"Error triggering geographic entity identification for document {id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/documents/{id}/ocr")
+async def generate_ocr(
+    id: str,
+    background_tasks: BackgroundTasks,
+    callback: Optional[str] = Query(None, description="JSONP callback name"),
+):
+    """
+    Trigger OCR generation for a document.
+    This endpoint will:
+    1. Fetch the document metadata
+    2. Get the asset path and type
+    3. Trigger an asynchronous task to generate OCR text
+    4. Return immediately with task ID
+    """
+    try:
+        # Fetch the document
+        async with database.transaction():
+            query = select(geoblacklight_development).where(geoblacklight_development.c.id == id)
+            result = await database.fetch_one(query)
+
+            if not result:
+                raise HTTPException(status_code=404, detail="Document not found")
+
+            # Convert to dict and handle datetime serialization
+            document = dict(result)
+            for key, value in document.items():
+                if isinstance(value, datetime):
+                    document[key] = value.isoformat()
+
+            logger.info(f"Processing document {id} for OCR")
+            logger.debug(f"Raw document data: {json.dumps(document, indent=2)}")
+
+            # Get asset information
+            asset_path = None
+            asset_type = None
+
+            # Parse dct_references_s to identify candidate assets
+            references = document.get("dct_references_s", {})
+            logger.info(f"Raw references for document {id}: {references}")
+
+            if isinstance(references, str):
+                try:
+                    references = json.loads(references)
+                    logger.info(f"Parsed references for document {id}: {json.dumps(references, indent=2)}")
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse references JSON for document {id}: {references}")
+                    references = {}
+
+            # Define asset type mappings
+            asset_type_mappings = {
+                "http://schema.org/downloadUrl": "download",
+                "http://iiif.io/api/image": "iiif_image",
+                "http://iiif.io/api/presentation#manifest": "iiif_manifest",
+                "https://github.com/cogeotiff/cog-spec": "cog",
+                "https://github.com/protomaps/PMTiles": "pmtiles",
+            }
+
+            # Check for each reference type
+            for ref_type, asset_type_name in asset_type_mappings.items():
+                if ref_type in references:
+                    ref_value = references[ref_type]
+                    logger.info(f"Found reference type {ref_type} with value {ref_value} for document {id}")
+
+                    # Handle both string and array values
+                    if isinstance(ref_value, list) and ref_value:
+                        asset_path = ref_value[0]
+                        asset_type = asset_type_name
+                        break
+                    elif isinstance(ref_value, str) and ref_value:
+                        asset_path = ref_value
+                        asset_type = asset_type_name
+                        break
+
+            # If no specific asset type was found, use the document format as fallback
+            if not asset_type:
+                asset_type = document.get("dc_format_s")
+                logger.info(f"No specific asset type found, using format fallback: {asset_type}")
+
+            logger.info(f"Final asset determination for document {id}: path={asset_path}, type={asset_type}")
+
+            # Trigger the OCR task
+            from app.tasks.ocr import generate_item_ocr
+
+            ocr_task = generate_item_ocr.delay(
+                item_id=id, metadata=document, asset_path=asset_path, asset_type=asset_type
+            )
+            logger.info(f"Started OCR task {ocr_task.id} for document {id}")
+
+            # Invalidate the document cache since we'll be updating it
+            invalidate_cache_with_prefix(f"document:{id}")
+
+            # Create response data
+            response_data = {
+                "status": "success",
+                "message": "OCR generation started",
+                "task_id": ocr_task.id
+            }
+
+            return create_response(response_data, callback)
+
+    except Exception as e:
+        logger.error(f"Error triggering OCR generation for document {id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e)) from e

@@ -3,18 +3,28 @@ import json
 import logging
 import os
 import re
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 import redis
 import requests
+import aiohttp
 
 from app.tasks.worker import fetch_and_cache_image
 
+logger = logging.getLogger(__name__)
 
 class ImageService:
-    def __init__(self, document: Dict):
-        self.document = document
-
+    """Service for handling different types of image assets."""
+    
+    def __init__(self, metadata: Dict[str, Any]):
+        """
+        Initialize the image service with document metadata.
+        
+        Args:
+            metadata: Document metadata dictionary
+        """
+        self.metadata = metadata
+        
         # Setup Redis connection
         self.redis_host = os.getenv("REDIS_HOST", "redis")
         self.redis_port = int(os.getenv("REDIS_PORT", 6379))
@@ -41,7 +51,7 @@ class ImageService:
         self.logger.addHandler(log_handler)
         self.logger.setLevel(logging.INFO)
 
-        # print(f"Document WXS: {self.document.get('gbl_wxsidentifier_s')}")
+        # print(f"Document WXS: {self.metadata.get('gbl_wxsidentifier_s')}")
 
     def _get_manifest(self, manifest_url: str) -> Optional[Dict]:
         """Get manifest from cache or fetch and cache it."""
@@ -163,99 +173,40 @@ class ImageService:
             return url
 
     def get_thumbnail_url(self) -> Optional[str]:
-        """Get the appropriate thumbnail URL based on the document type."""
+        """
+        Get the thumbnail URL from document metadata.
+        
+        Returns:
+            Thumbnail URL if available, None otherwise
+        """
         try:
-            doc_id = self.document.get("id")
-            if not doc_id:
-                return None
-
-            # Get references
-            references = self.document.get("dct_references_s")
+            # Parse references if needed
+            references = self.metadata.get("dct_references_s", {})
             if isinstance(references, str):
                 try:
                     references = json.loads(references)
                 except json.JSONDecodeError:
+                    logger.error("Failed to parse references JSON")
                     return None
-
-            if not isinstance(references, dict):
-                return None
-
-            thumbnail_url = None
-
-            # Direct thumbnail URL - fastest path
+                    
+            # Look for IIIF thumbnail URL
+            if "http://iiif.io/api/image" in references:
+                iiif_url = references["http://iiif.io/api/image"]
+                if isinstance(iiif_url, list) and iiif_url:
+                    iiif_url = iiif_url[0]
+                return f"{iiif_url}/full/200,/0/default.jpg"
+                
+            # Look for direct thumbnail URL
             if "http://schema.org/thumbnailUrl" in references:
-                url = references["http://schema.org/thumbnailUrl"]
-                thumbnail_url = self._standardize_iiif_url(url)
-
-            # IIIF Image API - fast path
-            elif "http://iiif.io/api/image" in references:
-                viewer_endpoint = references["http://iiif.io/api/image"]
-                raw_url = f"{viewer_endpoint.replace('info.json', '')}full/400,/0/default.jpg"
-                thumbnail_url = self._standardize_iiif_url(raw_url)
-
-            # IIIF Manifest - slower path
-            elif (
-                "https://iiif.io/api/presentation/2/context.json" in references
-                or "http://iiif.io/api/presentation#manifest" in references
-            ):
-                manifest_url = references.get(
-                    "https://iiif.io/api/presentation/2/context.json"
-                ) or references.get("http://iiif.io/api/presentation#manifest")
-                raw_url = self.get_iiif_manifest_thumbnail(manifest_url)
-                thumbnail_url = self._standardize_iiif_url(raw_url)
-
-            # ESRI services
-            elif "urn:x-esri:serviceType:ArcGIS#ImageMapLayer" in references:
-                viewer_endpoint = references["urn:x-esri:serviceType:ArcGIS#ImageMapLayer"]
-                thumbnail_url = f"{viewer_endpoint}/info/thumbnail/thumbnail.png"
-            elif "urn:x-esri:serviceType:ArcGIS#TiledMapLayer" in references:
-                viewer_endpoint = references["urn:x-esri:serviceType:ArcGIS#TiledMapLayer"]
-                thumbnail_url = f"{viewer_endpoint}/info/thumbnail/thumbnail.png"
-            elif "urn:x-esri:serviceType:ArcGIS#DynamicMapLayer" in references:
-                viewer_endpoint = references["urn:x-esri:serviceType:ArcGIS#DynamicMapLayer"]
-                thumbnail_url = f"{viewer_endpoint}/info/thumbnail/thumbnail.png"
-
-            # WMS
-            elif "http://www.opengis.net/def/serviceType/ogc/wms" in references:
-                wms_endpoint = references["http://www.opengis.net/def/serviceType/ogc/wms"]
-                width = 200
-                height = 200
-                layers = self.document.get("gbl_wxsidentifier_s", "")
-                thumbnail_url = (
-                    f"{wms_endpoint}/reflect?"
-                    f"FORMAT=image/png&"
-                    f"TRANSPARENT=TRUE&"
-                    f"WIDTH={width}&"
-                    f"HEIGHT={height}&"
-                    f"LAYERS={layers}"
-                )
-
-            # TMS
-            elif "http://www.opengis.net/def/serviceType/ogc/tms" in references:
-                tms_endpoint = references["http://www.opengis.net/def/serviceType/ogc/tms"]
-                thumbnail_url = (
-                    f"{tms_endpoint}/reflect?format=application/vnd.google-earth.kml+xml"
-                )
-
-            if thumbnail_url:
-                # Check if we have the image cached
-                image_key = f"image:{hashlib.sha256(thumbnail_url.encode()).hexdigest()}"
-                image_hash = hashlib.sha256(thumbnail_url.encode()).hexdigest()
-
-                if self.image_cache.exists(image_key):
-                    self.logger.info(f"🚀 Cache HIT for image {doc_id}")
-                    return f"{self.application_url}/api/v1/thumbnails/{image_hash}"
-
-                # If not cached, queue for background processing and return original URL
-                self.logger.info(f"🐌 Queueing image fetch for {doc_id}: {thumbnail_url}")
-                task = fetch_and_cache_image.delay(thumbnail_url)
-                self.logger.info(f"Task ID: {task.id}")
+                thumbnail_url = references["http://schema.org/thumbnailUrl"]
+                if isinstance(thumbnail_url, list) and thumbnail_url:
+                    return thumbnail_url[0]
                 return thumbnail_url
-
+                
             return None
-
+            
         except Exception as e:
-            self.logger.error(f"Error getting thumbnail URL: {e}")
+            logger.error(f"Error getting thumbnail URL: {str(e)}")
             return None
 
     async def get_cached_image(self, image_hash: str) -> Optional[bytes]:
@@ -269,4 +220,66 @@ class ImageService:
             return None
         except Exception as e:
             self.logger.error(f"Error retrieving cached image: {e}")
+            return None
+
+    async def get_iiif_image(self, image_url: str) -> Optional[bytes]:
+        """
+        Get image data from a IIIF image URL.
+        
+        Args:
+            image_url: The IIIF image URL
+            
+        Returns:
+            Image data in bytes, or None if retrieval fails
+        """
+        try:
+            # Remove /info.json from URL if present
+            base_url = image_url.replace("/info.json", "")
+            
+            # Get a full-size image for better OCR results
+            image_url = f"{base_url}/full/full/0/default.jpg"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(image_url) as response:
+                    if response.status == 200:
+                        image_data = await response.read()
+                        logger.info(f"Successfully retrieved IIIF image from {image_url}")
+                        return image_data
+                    else:
+                        logger.error(f"Failed to retrieve IIIF image: {response.status}")
+                        return None
+                        
+        except Exception as e:
+            logger.error(f"Error retrieving IIIF image: {str(e)}")
+            return None
+            
+    async def download_image(self, url: str) -> Optional[bytes]:
+        """
+        Download an image from a URL.
+        
+        Args:
+            url: The image URL
+            
+        Returns:
+            Image data in bytes, or None if download fails
+        """
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        # Check if it's an image
+                        content_type = response.headers.get("content-type", "").lower()
+                        if not content_type.startswith("image/"):
+                            logger.warning(f"URL {url} is not an image (content-type: {content_type})")
+                            return None
+                            
+                        image_data = await response.read()
+                        logger.info(f"Successfully downloaded image from {url}")
+                        return image_data
+                    else:
+                        logger.error(f"Failed to download image: {response.status}")
+                        return None
+                        
+        except Exception as e:
+            logger.error(f"Error downloading image: {str(e)}")
             return None

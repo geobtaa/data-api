@@ -15,6 +15,7 @@ class GeoEntityIdentifier:
         self.model = model
         self.api_url = api_url
         self.gazetteer_service = gazetteer_service
+        
         logger.info("Initialized GeoEntityIdentifier with local gazetteer service")
 
     async def identify_geo_entities(
@@ -52,17 +53,15 @@ class GeoEntityIdentifier:
         try:
             logger.info("Making API request to OpenAI")
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with (
-                    session.post(
-                        self.api_url,
-                        headers=headers,
-                        json={
-                            "model": self.model,
-                            "messages": [{"role": "user", "content": prompt}],
-                            "temperature": 0.3,  # Lower temperature for more accurate entity identification
-                        },
-                    ) as response
-                ):
+                async with session.post(
+                    self.api_url,
+                    headers=headers,
+                    json={
+                        "model": self.model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.3,  # Lower temperature for more accurate entity identification
+                    },
+                ) as response:
                     logger.debug(f"API Response status: {response.status}")
                     if response.status != 200:
                         error_text = await response.text()

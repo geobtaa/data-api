@@ -21,7 +21,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["app"]
+packages = ["app", "db"]
 
 # Simple Ruff configuration - compatible with v0.11.6
 [tool.ruff]

@@ -4,10 +4,12 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 from dotenv import load_dotenv
+import openai
+from openai import AsyncOpenAI
 
 from app.services.llm import GeoEntityIdentifier, SummaryGenerator
 
@@ -52,33 +54,90 @@ logger.debug("LLM Service debug logging enabled")
 
 
 class LLMService:
-    def __init__(
-        self, api_key: Optional[str] = None, model: Optional[str] = None, gazetteer_service=None
-    ):
-        # Use provided API key, environment variable, or raise error
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+    """Service for interacting with OpenAI's LLM models."""
+    
+    def __init__(self):
+        """Initialize the LLM service with OpenAI client."""
+        self.api_key = os.getenv('OPENAI_API_KEY')
         if not self.api_key:
-            raise ValueError(
-                "OpenAI API key is required. Set OPENAI_API_KEY environment variable "
-                "or pass it to the constructor."
-            )
-
-        # Use model from constructor, environment variable, or default to gpt-3.5-turbo
-        self.model = model or os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+            raise ValueError("OPENAI_API_KEY environment variable is not set")
+            
+        self.model = os.getenv('OPENAI_MODEL', 'gpt-4-vision-preview')
         self.api_url = "https://api.openai.com/v1/chat/completions"
-
-        # Store the gazetteer service
-        self.gazetteer_service = gazetteer_service
-        if not self.gazetteer_service:
-            logger.warning(
-                "No gazetteer service provided. Geographic entity identification will be limited."
-            )
-
-        # Initialize the specialized services
-        self.summary_generator = SummaryGenerator(self.api_key, self.model, self.api_url)
+        
+        # Configure OpenAI
+        openai.api_key = self.api_key
+        openai.api_base = self.api_url
+        
+        # Initialize the geo entity identifier
         self.geo_entity_identifier = GeoEntityIdentifier(
-            self.api_key, self.model, self.api_url, self.gazetteer_service
+            api_key=self.api_key,
+            model=self.model,
+            api_url=self.api_url
         )
+        
+    async def identify_geo_entities(self, text: str) -> List[Dict]:
+        """
+        Identify geographic entities in text using OpenAI's LLM.
+        
+        Args:
+            text: The text to analyze
+            
+        Returns:
+            List of dictionaries containing geographic entities and their metadata
+        """
+        try:
+            # Use the geo entity identifier
+            entities, _, _ = await self.geo_entity_identifier.identify_geo_entities(text)
+            return entities
+        except Exception as e:
+            logger.error(f"Error identifying geographic entities: {str(e)}")
+            raise
+            
+    async def perform_ocr(self, image_data: bytes) -> str:
+        """
+        Perform OCR on an image using OpenAI's vision model.
+        
+        Args:
+            image_data: The image data in bytes
+            
+        Returns:
+            Extracted text from the image
+        """
+        try:
+            # Convert image data to base64
+            import base64
+            image_base64 = base64.b64encode(image_data).decode('utf-8')
+            
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Extract all text from this image. Include any dates, numbers, and special characters. Preserve the original formatting and line breaks."
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_base64}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=1000
+            )
+            
+            ocr_text = response.choices[0].message.content
+            logger.info(f"Successfully extracted text from image")
+            return ocr_text
+            
+        except Exception as e:
+            logger.error(f"Error performing OCR: {str(e)}")
+            raise
 
     async def generate_summary(
         self, metadata: Dict[str, Any], asset_content: Optional[str] = None
@@ -98,24 +157,6 @@ class LLMService:
             - Dict: The output parser configuration
         """
         return await self.summary_generator.generate_summary(metadata, asset_content)
-
-    async def identify_geo_entities(
-        self, text: str, context: Optional[Dict[str, Any]] = None
-    ) -> Tuple[list, Dict[str, Any], Dict[str, Any]]:
-        """
-        Identify geographic named entities in text and map them to local gazetteer entries.
-
-        Args:
-            text: Text content to analyze for geographic entities
-            context: Optional dictionary containing additional context for entity identification
-
-        Returns:
-            Tuple containing:
-            - List[Dict]: List of identified geographic entities with gazetteer mappings
-            - Dict: The prompt used for generation
-            - Dict: The output parser configuration
-        """
-        return await self.geo_entity_identifier.identify_geo_entities(text, context)
 
     async def process_asset(self, asset_path: str, asset_type: str) -> Optional[str]:
         """
@@ -220,55 +261,30 @@ class LLMService:
         logger.debug(f"OCR prompt: {prompt}")
         logger.debug(f"Output parser configuration: {output_parser}")
 
-        # Call OpenAI API with timeout
-        timeout = aiohttp.ClientTimeout(total=60)  # 1 minute timeout
-        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
-
-        # Log the API request configuration
-        logger.debug(f"API URL: {self.api_url}")
-        logger.debug(f"Request timeout: {timeout.total} seconds")
-
-        request_body = {
-            "model": self.model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant that extracts text from "
-                    "historical maps and geographic datasets using OCR.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.3,  # Lower temperature for more accurate OCR
-            "max_tokens": 1000,  # Higher token limit for OCR text
-            "top_p": 0.8,
-        }
-        logger.debug(f"Request body: {json.dumps(request_body, indent=2)}")
-
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            try:
-                async with session.post(
-                    self.api_url,
-                    headers=headers,
-                    json=request_body,
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(
-                            f"API request failed with status {response.status}: {error_text}"
-                        )
-                        raise Exception(f"Failed to generate OCR text: {error_text}")
-
-                    result = await response.json()
-                    ocr_text = result["choices"][0]["message"]["content"]
-                    logger.info(f"Successfully generated OCR text of length {len(ocr_text)}")
-                    logger.debug(f"Generated OCR text: {ocr_text}")
-                    return ocr_text, prompt, output_parser
-            except asyncio.TimeoutError as err:
-                logger.error("Timeout while generating OCR text with OpenAI API")
-                raise Exception("Timeout while generating OCR text with OpenAI API") from err
-            except Exception as e:
-                logger.error(f"Error generating OCR text with OpenAI API: {str(e)}")
-                raise Exception(f"Error generating OCR text with OpenAI API: {str(e)}") from e
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant that extracts text from "
+                        "historical maps and geographic datasets using OCR.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,  # Lower temperature for more accurate OCR
+                max_tokens=1000,  # Higher token limit for OCR text
+                top_p=0.8,
+            )
+            
+            ocr_text = response.choices[0].message.content
+            logger.info(f"Successfully generated OCR text of length {len(ocr_text)}")
+            logger.debug(f"Generated OCR text: {ocr_text}")
+            return ocr_text, prompt, output_parser
+            
+        except Exception as e:
+            logger.error(f"Error generating OCR text with OpenAI API: {str(e)}")
+            raise Exception(f"Error generating OCR text with OpenAI API: {str(e)}") from e
 
     def _construct_ocr_prompt(
         self, metadata: Dict[str, Any], asset_content: Optional[str] = None

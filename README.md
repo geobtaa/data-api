@@ -236,8 +236,9 @@ Data from Who's On First. [License](https://whosonfirst.org/docs/licenses/)
 - [ ] GeoJSONs
 - [ ] AI - Metadata summaries
 - [ ] AI - Imagery - Summary
-- [ ] AI - Imagery - Summary for visually impaired
 - [ ] AI - Imagery - OCR'd text
 - [ ] AI - Tabular data summaries
 - [ ] AI - Subject enhancements
-
+- [ ] API - Analytics (PostHog?)
+- [ ] API - Authentication/Authorization for "Admin" endpoints
+- [ ] API - Throttling
