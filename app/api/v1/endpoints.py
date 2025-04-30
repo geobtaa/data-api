@@ -620,8 +620,12 @@ async def summarize_document(
             if not result:
                 raise HTTPException(status_code=404, detail="Document not found")
 
-            # Convert to dict
+            # Convert to dict and handle datetime serialization
             document = dict(result)
+            for key, value in document.items():
+                if isinstance(value, datetime):
+                    document[key] = value.isoformat()
+
             logger.info(f"Processing document {id}")
             logger.debug(f"Raw document data: {json.dumps(document, indent=2)}")
 
@@ -709,13 +713,19 @@ async def summarize_document(
             # Invalidate the document cache since we'll be updating it
             invalidate_cache_with_prefix(f"document:{id}")
 
+            # Create response data and ensure all datetime objects are serialized
             response_data = {
                 "status": "success",
                 "message": "Summary and OCR generation started",
-                "tasks": {"summary": summary_task.id, "ocr": ocr_task.id if ocr_task else None},
+                "tasks": {
+                    "summary": summary_task.id,
+                    "ocr": ocr_task.id if ocr_task else None
+                }
             }
 
-            return create_response(response_data, callback)
+            # Sanitize the response data before returning
+            sanitized_response = sanitize_for_json(response_data)
+            return create_response(sanitized_response, callback)
 
     except Exception as e:
         logger.error(f"Error triggering summary and OCR generation for document {id}: {str(e)}")
