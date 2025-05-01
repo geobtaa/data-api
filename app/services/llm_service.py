@@ -88,8 +88,7 @@ class LLMService:
         """
         try:
             # Use the geo entity identifier
-            entities, _, _ = await self.geo_entity_identifier.identify_geo_entities(text)
-            return entities
+            return await self.geo_entity_identifier.identify_geo_entities(text)
         except Exception as e:
             logger.error(f"Error identifying geographic entities: {str(e)}")
             raise

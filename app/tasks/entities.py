@@ -43,7 +43,13 @@ def generate_geo_entities(item_id: str, metadata: Dict[str, Any]):
         # Clean up
         loop.close()
 
-async def store_geo_entities_in_db(document_id: str, model: str, entities: Dict[str, Any]):
+async def store_geo_entities_in_db(
+    document_id: str,
+    model: str,
+    entities: Dict[str, Any],
+    prompt: Dict[str, Any],
+    output_parser: Dict[str, Any],
+):
     """
     Store the identified geographic entities in the ai_enrichments table.
 
@@ -51,6 +57,8 @@ async def store_geo_entities_in_db(document_id: str, model: str, entities: Dict[
         document_id: The ID of the document
         model: The model used for identification
         entities: The identified geographic entities
+        prompt: The prompt used for generation
+        output_parser: The output parser configuration
     """
     try:
         # Ensure database is connected
@@ -72,6 +80,8 @@ async def store_geo_entities_in_db(document_id: str, model: str, entities: Dict[
             'enrichment_type': 'geo_entities',
             'ai_provider': 'OpenAI',
             'model': model,
+            'prompt': prompt,
+            'output_parser': output_parser,
             'response': response_data,
             'created_at': now,
             'updated_at': now,
@@ -116,10 +126,10 @@ async def _identify_geo_entities(item_id: str, metadata: Dict[str, Any]):
         combined_text = "\n".join(text_content)
         
         # Use LLM service to identify geographic entities
-        entities = await llm_service.identify_geo_entities(combined_text)
+        entities, prompt, output_parser = await llm_service.identify_geo_entities(combined_text)
         
         # Store results in database
-        await store_geo_entities_in_db(item_id, llm_service.model, entities)
+        await store_geo_entities_in_db(item_id, llm_service.model, entities, prompt, output_parser)
             
         logger.info(f"Completed geographic entity identification for document {item_id}")
         return entities
