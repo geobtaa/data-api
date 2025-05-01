@@ -58,7 +58,7 @@ services:
       retries: 5
 
   paradedb:
-    image: paradedb/paradedb:latest
+    image: paradedb/paradedb:0.15.14
     container_name: data-api-paradedb
     environment:
       - POSTGRES_USER=postgres
@@ -114,22 +114,28 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A app.tasks.worker flower --port=5555
+    command: >
+      bash -c "cd /app && celery -A app.tasks.worker flower --port=5555"
     ports:
       - "5555:5555"
     environment:
+      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/geoblacklight_development
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_TTL=604800
+      - PYTHONPATH=/app
+      - LOG_LEVEL=DEBUG
     networks:
       - elastic
     depends_on:
       - redis
+      - paradedb
       - celery_worker
 
 volumes:
   elasticsearch-data:
   paradedb-data:
-  redis-data:  # Add Redis volume
+  redis-data:
 
 networks:
   elastic:
