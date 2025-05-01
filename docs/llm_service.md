@@ -1,82 +1,30 @@
 # LLM Service Documentation
 
-This document provides comprehensive documentation for the LLM (Large Language Model) service used in the data-api project. The service uses Ollama to provide AI-powered summarization capabilities for historical maps and geographic datasets.
+This document provides comprehensive documentation for the LLM (Large Language Model) service used in the data-api project. The service uses OpenAI's GPT models to provide AI-powered summarization, OCR, and geographic entity identification capabilities for historical maps and geographic datasets.
 
 ## Table of Contents
 - [Overview](#overview)
 - [Setup](#setup)
-- [Managing Ollama](#managing-ollama)
 - [API Endpoints](#api-endpoints)
 - [Environment Variables](#environment-variables)
 - [Troubleshooting](#troubleshooting)
 
 ## Overview
 
-The LLM service provides AI-powered summarization capabilities for historical maps and geographic datasets. It uses Ollama as the backend LLM service and supports various models like gemma3:1b and gemma3:4b. The service is integrated with the main API and provides endpoints for generating and retrieving summaries.
+The LLM service provides AI-powered capabilities for historical maps and geographic datasets, including:
+- Text summarization
+- OCR (Optical Character Recognition) for extracting text from images
+- Geographic entity identification and mapping to local gazetteer entries
+
+The service uses OpenAI's GPT models as the backend LLM service, with support for various models like `gpt-3.5-turbo` and other OpenAI models.
 
 ## Setup
 
-The LLM service is part of the Docker Compose setup. To get started:
+The LLM service requires an OpenAI API key to function. To get started:
 
-1. Ensure you have Docker and Docker Compose installed
-2. Clone the repository
-3. Start the services:
-```bash
-docker-compose up -d
-```
-
-This will start all required services, including Ollama.
-
-## Managing Ollama
-
-### Starting and Stopping Ollama
-
-The Ollama service is managed through Docker Compose:
-
-```bash
-# Start Ollama
-docker-compose up -d ollama
-
-# Stop Ollama
-docker-compose stop ollama
-
-# Restart Ollama
-docker-compose restart ollama
-```
-
-### Managing Models
-
-#### Installing a New Model
-
-To install a new model in Ollama:
-
-```bash
-# Format
-docker exec data-api-ollama ollama pull <model-name>
-
-# Example: Install gemma3:1b
-docker exec data-api-ollama ollama pull gemma3:1b
-```
-
-#### Removing a Model
-
-To remove a model:
-
-```bash
-# Format
-docker exec data-api-ollama ollama rm <model-name>
-
-# Example: Remove gemma3:1b
-docker exec data-api-ollama ollama rm gemma3:1b
-```
-
-#### List Available Models
-
-To see all installed models:
-
-```bash
-docker exec data-api-ollama ollama list
-```
+1. Obtain an OpenAI API key from [OpenAI's platform](https://platform.openai.com/)
+2. Set up your environment variables (see [Environment Variables](#environment-variables))
+3. Ensure the service has access to the gazetteer service for geographic entity identification
 
 ## API Endpoints
 
@@ -91,6 +39,14 @@ POST /api/v1/documents/{id}/summarize
 Parameters:
 - `id` (path parameter): The document ID
 - `callback` (query parameter, optional): JSONP callback name
+
+Example CURL request:
+```bash
+curl -X POST \
+  'http://localhost:8000/api/v1/documents/123/summarize' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer your-api-key'
+```
 
 Response:
 ```json
@@ -123,8 +79,8 @@ Response:
             "summaries": [
                 {
                     "enrichment_id": "id",
-                    "ai_provider": "Ollama",
-                    "model": "gemma3:1b",
+                    "ai_provider": "OpenAI",
+                    "model": "gpt-3.5-turbo",
                     "response": {
                         "summary": "Generated summary text",
                         "timestamp": "2024-03-22T12:00:00Z"
@@ -137,36 +93,85 @@ Response:
 }
 ```
 
+### Generate OCR
+
+Extract text from images using OCR:
+
+```http
+POST /api/v1/documents/{id}/ocr
+```
+
+Parameters:
+- `id` (path parameter): The document ID
+- `callback` (query parameter, optional): JSONP callback name
+
+Response:
+```json
+{
+    "status": "success",
+    "message": "OCR generation started",
+    "task_id": "task-id-here"
+}
+```
+
+### Identify Geographic Entities
+
+Identify and map geographic entities in text:
+
+```http
+POST /api/v1/documents/{id}/identify-geo-entities
+```
+
+Parameters:
+- `id` (path parameter): The document ID
+- `callback` (query parameter, optional): JSONP callback name
+
+Response:
+```json
+{
+    "status": "success",
+    "message": "Geographic entity identification started",
+    "task_id": "task-id-here"
+}
+```
+
 ## Environment Variables
 
 The LLM service uses the following environment variables:
 
-- `OLLAMA_HOST`: The URL of the Ollama service (default: "http://ollama:11434")
-- `OLLAMA_MODEL`: The default model to use (default: "gemma3:1b")
+- `OPENAI_API_KEY`: Your OpenAI API key (required)
+- `OPENAI_MODEL`: The default model to use (default: "gpt-3.5-turbo")
+- `LOG_PATH`: Path to store service logs (default: "logs")
 
-These can be set in your `.env` file or in the Docker Compose environment section.
+These should be set in your environment or in the service configuration.
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Ollama Service Not Responding**
-   - Check if the Ollama container is running: `docker-compose ps`
-   - Check Ollama logs: `docker-compose logs ollama`
-   - Ensure the OLLAMA_HOST environment variable is set correctly
+1. **API Authentication Failures**
+   - Verify your OpenAI API key is correct and valid
+   - Check if the API key has sufficient permissions
+   - Ensure the API key is properly set in the environment variables
 
-2. **Model Not Found**
-   - Verify the model is installed: `docker exec data-api-ollama ollama list`
-   - Reinstall the model if needed: `docker exec data-api-ollama ollama pull <model-name>`
+2. **Model Not Available**
+   - Verify the specified model is available in your OpenAI account
+   - Check if you have access to the requested model
+   - Ensure the model name is spelled correctly
 
 3. **Summary Generation Fails**
-   - Check the API logs: `docker-compose logs api`
+   - Check the API logs for error messages
    - Verify the document exists in the database
-   - Ensure the Ollama service is running and accessible
+   - Ensure the input data is properly formatted
+
+4. **OCR Generation Issues**
+   - Verify the image is accessible and in a supported format
+   - Check if the image contains readable text
+   - Ensure the image size is within OpenAI's limits
 
 ### Getting Help
 
 If you encounter issues not covered here:
-1. Check the application logs
-2. Review the Ollama documentation
+1. Check the application logs in the specified log directory
+2. Review the OpenAI API documentation
 3. Contact the development team 

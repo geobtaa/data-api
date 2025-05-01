@@ -2,7 +2,13 @@
 """
 Test script for gazetteer API endpoints.
 
-This script makes requests to the gazetteer API endpoints to verify they're working correctly.
+This script provides a comprehensive test suite for the gazetteer API endpoints.
+It tests multiple gazetteer sources (GeoNames, Who's on First, BTAA) and provides
+detailed output of the test results. The script can be configured to test different
+environments by specifying a custom base URL.
+
+Usage:
+    python scripts/test_gazetteer_api.py [--base-url URL]
 """
 
 import argparse
@@ -12,12 +18,30 @@ import requests
 
 
 def print_json(data):
-    """Print JSON data in a pretty format."""
+    """
+    Print JSON data in a pretty format.
+    
+    Args:
+        data: JSON data to print
+    """
     print(json.dumps(data, indent=2))
 
 
 def test_endpoints(base_url="http://localhost:8000/api/v1"):
-    """Test all gazetteer API endpoints."""
+    """
+    Test all gazetteer API endpoints.
+    
+    This function tests the following endpoints:
+    1. List all gazetteers
+    2. Search GeoNames
+    3. Search Who's on First
+    4. Get WOF details
+    5. Search BTAA
+    6. Search all gazetteers
+    
+    Args:
+        base_url: Base URL for the API (default: http://localhost:8000/api/v1)
+    """
     print("\n" + "=" * 80)
     print(f"Testing gazetteer API endpoints at {base_url}")
     print("=" * 80)
@@ -137,6 +161,14 @@ def test_endpoints(base_url="http://localhost:8000/api/v1"):
 
 
 def main():
+    """
+    Parse command line arguments and run the API tests.
+    
+    This function:
+    1. Sets up the argument parser
+    2. Parses command line arguments
+    3. Executes the API tests with the specified base URL
+    """
     parser = argparse.ArgumentParser(description="Test gazetteer API endpoints")
     parser.add_argument(
         "--base-url",
