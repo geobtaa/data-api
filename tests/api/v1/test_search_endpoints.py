@@ -166,11 +166,11 @@ async def test_suggest_endpoint(mock_es_search, mock_suggest_response):
     # Setup mock
     mock_search_instance = MagicMock()
     mock_search_instance.body = mock_suggest_response
-    
+
     # Create an async mock that returns the mock_search_instance
     async def async_mock_search(*args, **kwargs):
         return mock_search_instance
-    
+
     mock_es_search.side_effect = async_mock_search
 
     # Call endpoint

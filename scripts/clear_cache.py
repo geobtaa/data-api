@@ -35,13 +35,13 @@ load_dotenv()
 def clear_redis_cache():
     """
     Clear all Redis databases used by the application.
-    
+
     This function:
     1. Connects to Redis using environment variables
     2. Clears all databases using FLUSHALL
     3. Reports success and current memory usage
     4. Handles any errors that occur during the process
-    
+
     Raises:
         Exception: If there's an error connecting to Redis or clearing the cache
     """

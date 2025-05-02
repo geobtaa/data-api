@@ -225,6 +225,22 @@ gazetteer_fast = Table(
     Column("updated_at", TIMESTAMP),
 )
 
+# FAST gazetteer embeddings
+# Stores vector embeddings for FAST gazetteer entries
+gazetteer_fast_embeddings = Table(
+    "gazetteer_fast_embeddings",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("fast_id", String, nullable=False, unique=True, index=True),
+    Column("label", String, nullable=False),
+    Column("geoname_id", String),
+    Column("viaf_id", String),
+    Column("wikipedia_id", String),
+    Column("embeddings", String, nullable=False),  # Will be cast to vector(1536) in the database
+    Column("created_at", TIMESTAMP),
+    Column("updated_at", TIMESTAMP),
+)
+
 # AI Enrichments table
 ai_enrichments = Table(
     "ai_enrichments",

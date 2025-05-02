@@ -26,9 +26,8 @@ from ...services.cache_service import (
 from ...services.citation_service import CitationService
 from ...services.image_service import ImageService
 from ...services.viewer_service import create_viewer_attributes
-from ...tasks.summarization import generate_item_summary
 from ...tasks.entities import generate_geo_entities
-from ...tasks.ocr import generate_item_ocr
+from ...tasks.summarization import generate_item_summary
 from .jsonp import JSONPResponse
 from .shared import SORT_MAPPINGS, SortOption
 
@@ -50,7 +49,7 @@ async def api_root():
     """Return basic API information including version."""
     return JSONResponse(
         content={
-            "api": "BTAA Geoportal API",
+            "api": "BTAA Geodata API",
             "version": "0.1.0",
             "description": "API for accessing geospatial data from the Big Ten Academic Alliance Geoportal",
             "endpoints": [
@@ -719,10 +718,7 @@ async def summarize_document(
             response_data = {
                 "status": "success",
                 "message": "Summary and OCR generation started",
-                "tasks": {
-                    "summary": summary_task.id,
-                    "ocr": ocr_task.id if ocr_task else None
-                }
+                "tasks": {"summary": summary_task.id, "ocr": ocr_task.id if ocr_task else None},
             }
 
             # Sanitize the response data before returning
@@ -825,12 +821,11 @@ async def identify_geo_entities(
             logger.info(f"Processing document {id} for geographic entity identification")
             logger.debug(f"Raw document data: {json.dumps(document, indent=2)}")
 
-
             # Trigger the geographic entity identification task
-            geo_entities_task = generate_geo_entities.delay(
-                item_id=id, metadata=document
+            geo_entities_task = generate_geo_entities.delay(item_id=id, metadata=document)
+            logger.info(
+                f"Started geographic entity identification task {geo_entities_task.id} for document {id}"
             )
-            logger.info(f"Started geographic entity identification task {geo_entities_task.id} for document {id}")
 
             # Invalidate the document cache since we'll be updating it
             invalidate_cache_with_prefix(f"document:{id}")
@@ -839,13 +834,15 @@ async def identify_geo_entities(
             response_data = {
                 "status": "success",
                 "message": "Geographic entity identification started",
-                "task_id": geo_entities_task.id
+                "task_id": geo_entities_task.id,
             }
 
             return create_response(response_data, callback)
 
     except Exception as e:
-        logger.error(f"Error triggering geographic entity identification for document {id}: {str(e)}")
+        logger.error(
+            f"Error triggering geographic entity identification for document {id}: {str(e)}"
+        )
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -892,7 +889,9 @@ async def generate_ocr(
             if isinstance(references, str):
                 try:
                     references = json.loads(references)
-                    logger.info(f"Parsed references for document {id}: {json.dumps(references, indent=2)}")
+                    logger.info(
+                        f"Parsed references for document {id}: {json.dumps(references, indent=2)}"
+                    )
                 except json.JSONDecodeError:
                     logger.error(f"Failed to parse references JSON for document {id}: {references}")
                     references = {}
@@ -910,7 +909,9 @@ async def generate_ocr(
             for ref_type, asset_type_name in asset_type_mappings.items():
                 if ref_type in references:
                     ref_value = references[ref_type]
-                    logger.info(f"Found reference type {ref_type} with value {ref_value} for document {id}")
+                    logger.info(
+                        f"Found reference type {ref_type} with value {ref_value} for document {id}"
+                    )
 
                     # Handle both string and array values
                     if isinstance(ref_value, list) and ref_value:
@@ -927,7 +928,9 @@ async def generate_ocr(
                 asset_type = document.get("dc_format_s")
                 logger.info(f"No specific asset type found, using format fallback: {asset_type}")
 
-            logger.info(f"Final asset determination for document {id}: path={asset_path}, type={asset_type}")
+            logger.info(
+                f"Final asset determination for document {id}: path={asset_path}, type={asset_type}"
+            )
 
             # Trigger the OCR task
             from app.tasks.ocr import generate_item_ocr
@@ -944,7 +947,7 @@ async def generate_ocr(
             response_data = {
                 "status": "success",
                 "message": "OCR generation started",
-                "task_id": ocr_task.id
+                "task_id": ocr_task.id,
             }
 
             return create_response(response_data, callback)

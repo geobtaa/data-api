@@ -4,12 +4,12 @@ import logging
 import os
 import re
 import tempfile
-import zipfile
-from datetime import datetime
-from typing import Any, Dict, List, Optional
-from urllib.request import urlretrieve
 import xml.sax
 import xml.sax.handler
+import zipfile
+from datetime import datetime
+from typing import Any, Dict, List
+from urllib.request import urlretrieve
 
 """
 FAST (Faceted Application of Subject Terminology) Importer
@@ -51,7 +51,7 @@ class FastMarcXmlHandler(xml.sax.handler.ContentHandler):
         """Handle start element events."""
         # Remove namespace prefix if present
         local_name = name.split(":")[-1]
-        
+
         if local_name == "record":
             self.in_record = True
             self.current_record = {}
@@ -79,7 +79,7 @@ class FastMarcXmlHandler(xml.sax.handler.ContentHandler):
         """Handle end element events."""
         # Remove namespace prefix if present
         local_name = name.split(":")[-1]
-        
+
         if local_name == "record":
             self.in_record = False
             self.records.append(self.current_record)
@@ -139,7 +139,7 @@ class FastImporter(BaseImporter):
 
     # CSV field names
     FIELDNAMES = ["fast_id", "uri", "type", "label", "geoname_id", "viaf_id", "wikipedia_id"]
-    
+
     # Reduced chunk size to avoid PostgreSQL parameter limit (32,767)
     # Each record has 6 fields, so we need to keep chunk_size * 6 < 32767
     CHUNK_SIZE = 1000
@@ -165,26 +165,26 @@ class FastImporter(BaseImporter):
         # Create a temporary directory for extraction
         with tempfile.TemporaryDirectory() as temp_dir:
             zip_path = os.path.join(temp_dir, "FASTGeographic.marcxml.zip")
-            
+
             # Download the file
             self.logger.info(f"Downloading FAST dataset from {self.FAST_URL}")
             try:
                 urlretrieve(self.FAST_URL, zip_path)
                 self.logger.info(f"Downloaded file to {zip_path}")
-                
+
                 # Check if the file was downloaded successfully
                 if not os.path.exists(zip_path):
                     raise FileNotFoundError(f"Failed to download file from {self.FAST_URL}")
-                
+
                 file_size = os.path.getsize(zip_path)
                 self.logger.info(f"Downloaded file size: {file_size} bytes")
-                
+
                 if file_size == 0:
                     raise ValueError("Downloaded file is empty")
             except Exception as e:
                 self.logger.error(f"Error downloading file: {e}")
                 raise
-            
+
             # Extract the file
             self.logger.info("Extracting MARCXML file")
             try:
@@ -192,35 +192,35 @@ class FastImporter(BaseImporter):
                     # List all files in the zip
                     all_files = zip_ref.namelist()
                     self.logger.info(f"Files in ZIP: {all_files}")
-                    
+
                     # Find the MARCXML file in the zip
                     marcxml_files = [f for f in all_files if f.endswith(".marcxml")]
                     if not marcxml_files:
                         raise FileNotFoundError("No MARCXML file found in the ZIP archive")
-                    
+
                     # Extract the first MARCXML file
                     marcxml_filename = marcxml_files[0]
                     self.logger.info(f"Extracting {marcxml_filename} from ZIP")
                     zip_ref.extract(marcxml_filename, temp_dir)
-                    
+
                     # Move the extracted file to the data directory
                     extracted_path = os.path.join(temp_dir, marcxml_filename)
                     target_path = os.path.join(self.data_directory, "FASTGeographic.marcxml")
-                    
+
                     # Copy the file to the data directory
                     with open(extracted_path, "rb") as src, open(target_path, "wb") as dst:
                         dst.write(src.read())
-                    
+
                     # Check if the file was copied successfully
                     if not os.path.exists(target_path):
                         raise FileNotFoundError(f"Failed to copy file to {target_path}")
-                    
+
                     file_size = os.path.getsize(target_path)
                     self.logger.info(f"Extracted MARCXML file size: {file_size} bytes")
-                    
+
                     if file_size == 0:
                         raise ValueError("Extracted MARCXML file is empty")
-                    
+
                     self.logger.info(f"Extracted MARCXML file to {target_path}")
                     return target_path
             except Exception as e:
@@ -238,30 +238,30 @@ class FastImporter(BaseImporter):
             List of parsed records.
         """
         self.logger.info(f"Parsing MARCXML file: {marcxml_file}")
-        
+
         # Check if the file exists
         if not os.path.exists(marcxml_file):
             self.logger.error(f"MARCXML file does not exist: {marcxml_file}")
             return []
-        
+
         # Check file size
         file_size = os.path.getsize(marcxml_file)
         self.logger.info(f"MARCXML file size: {file_size} bytes")
-        
+
         if file_size == 0:
             self.logger.error("MARCXML file is empty")
             return []
-        
+
         # Create a SAX parser
         parser = xml.sax.make_parser()
         handler = FastMarcXmlHandler()
         parser.setContentHandler(handler)
-        
+
         # Parse the file
         try:
             parser.parse(marcxml_file)
             self.logger.info(f"Parsed {len(handler.records)} records from MARCXML file")
-            
+
             # Log a sample of the first record if available
             if handler.records:
                 self.logger.info(f"Sample record keys: {list(handler.records[0].keys())}")
@@ -271,7 +271,7 @@ class FastImporter(BaseImporter):
                     self.logger.info(f"Sample URI: {handler.records[0]['024']}")
                 if "151" in handler.records[0]:
                     self.logger.info(f"Sample label: {handler.records[0]['151']}")
-            
+
             return handler.records
         except Exception as e:
             self.logger.error(f"Error parsing MARCXML file: {e}")
@@ -288,14 +288,14 @@ class FastImporter(BaseImporter):
             List of processed records ready for CSV export.
         """
         processed_records = []
-        
+
         self.logger.info(f"Processing {len(records)} records")
-        
+
         for i, record in enumerate(records):
             # Log progress every 1000 records
             if i > 0 and i % 1000 == 0:
                 self.logger.info(f"Processed {i} records so far")
-            
+
             # Extract FAST ID from 016 field
             fast_id = None
             for key in record:
@@ -304,29 +304,31 @@ class FastImporter(BaseImporter):
                     for value in record[key]:
                         match = re.match(r"fst(\d+)", value)
                         if match:
-                            fast_id = str(int(match.group(1)))  # Convert to int to remove leading zeros
+                            fast_id = str(
+                                int(match.group(1))
+                            )  # Convert to int to remove leading zeros
                             self.logger.debug(f"Extracted FAST ID: {fast_id} from {value}")
                             break
                     if fast_id:
                         break
-            
+
             # Construct URI from FAST ID
             fast_uri = f"https://id.worldcat.org/fast/{fast_id}" if fast_id else None
-            
+
             # Type is always "place" for geographic entries
             type_value = "place"
-            
+
             # Extract label from 151 field
             label = None
             label_parts = []
             for key in record:
                 if key.startswith("151_"):
                     label_parts.extend(record[key])
-            
+
             if label_parts:
                 label = "--".join(label_parts)
                 self.logger.debug(f"Extracted label: {label}")
-            
+
             # Extract GeoNames ID from 751 field
             geoname_id = None
             for key in record:
@@ -340,7 +342,7 @@ class FastImporter(BaseImporter):
                             break
                     if geoname_id:
                         break
-            
+
             # Extract VIAF ID from 751 field
             viaf_id = None
             for key in record:
@@ -354,7 +356,7 @@ class FastImporter(BaseImporter):
                             break
                     if viaf_id:
                         break
-            
+
             # Extract Wikipedia page identifier from 751 field
             wikipedia_id = None
             for key in record:
@@ -368,27 +370,31 @@ class FastImporter(BaseImporter):
                             break
                     if wikipedia_id:
                         break
-            
+
             # Only add records with required fields
             if fast_id and fast_uri and label:
-                processed_records.append({
-                    "fast_id": fast_id,
-                    "uri": fast_uri,
-                    "type": type_value,
-                    "label": label,
-                    "geoname_id": geoname_id,
-                    "viaf_id": viaf_id,
-                    "wikipedia_id": wikipedia_id
-                })
+                processed_records.append(
+                    {
+                        "fast_id": fast_id,
+                        "uri": fast_uri,
+                        "type": type_value,
+                        "label": label,
+                        "geoname_id": geoname_id,
+                        "viaf_id": viaf_id,
+                        "wikipedia_id": wikipedia_id,
+                    }
+                )
             else:
-                self.logger.debug(f"Skipping record due to missing required fields: fast_id={fast_id}, uri={uri}, label={label}")
-        
+                self.logger.debug(
+                    f"Skipping record due to missing required fields: fast_id={fast_id}, uri={uri}, label={label}"
+                )
+
         self.logger.info(f"Processed {len(processed_records)} records")
-        
+
         # Log a sample of the first processed record if available
         if processed_records:
             self.logger.info(f"Sample processed record: {processed_records[0]}")
-        
+
         return processed_records
 
     def export_to_csv(self, records: List[Dict[str, Any]]) -> str:
@@ -402,12 +408,12 @@ class FastImporter(BaseImporter):
             Path to the exported CSV file.
         """
         csv_path = os.path.join(self.data_directory, "fast_geographic.csv")
-        
+
         with open(csv_path, "w", newline="", encoding="utf-8") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=self.FIELDNAMES)
             writer.writeheader()
             writer.writerows(records)
-        
+
         self.logger.info(f"Exported {len(records)} records to {csv_path}")
         return csv_path
 
@@ -423,23 +429,23 @@ class FastImporter(BaseImporter):
         """
         # Call the parent method to handle common cleaning
         record = super().clean_record(record)
-        
+
         # Ensure required fields are present
         if not record.get("fast_id"):
             self.logger.warning("Skipping record with null fast_id")
             return None
-        
+
         if not record.get("uri"):
             self.logger.warning(f"Skipping record {record.get('fast_id')} with null uri")
             return None
-        
+
         if not record.get("type"):
             record["type"] = "place"  # Default type
-        
+
         if not record.get("label"):
             self.logger.warning(f"Skipping record {record.get('fast_id')} with null label")
             return None
-        
+
         return record
 
     async def import_data(self) -> Dict[str, Any]:
@@ -450,25 +456,25 @@ class FastImporter(BaseImporter):
             Dictionary with import statistics.
         """
         start_time = datetime.now()
-        
+
         try:
             # Download and extract the MARCXML file
             marcxml_file = self.download_and_extract()
             self.marcxml_file = marcxml_file
-            
+
             # Parse the MARCXML file
             records = self.parse_marcxml(marcxml_file)
-            
+
             # Process the records
             processed_records = self.process_records(records)
-            
+
             # Export to CSV for verification
             csv_file = self.export_to_csv(processed_records)
             self.csv_file = csv_file
-            
+
             # Truncate the table if it exists
             await self.truncate_table(self.table_name)
-            
+
             # Clean the records
             self.logger.info("Cleaning records...")
             cleaned_records = []
@@ -476,14 +482,14 @@ class FastImporter(BaseImporter):
                 cleaned_record = self.clean_record(record)
                 if cleaned_record is not None:
                     cleaned_records.append(cleaned_record)
-            
+
             self.logger.info(f"Cleaned {len(cleaned_records)} records")
-            
+
             # Bulk insert the records
             self.logger.info(f"Inserting records using chunk size of {self.CHUNK_SIZE}...")
             chunks = self.chunk_data(cleaned_records, self.CHUNK_SIZE)
             total_chunks = len(chunks)
-            
+
             inserted = 0
             for i, chunk in enumerate(chunks):
                 if i > 0 and i % 10 == 0:  # Log progress every 10 chunks
@@ -494,16 +500,16 @@ class FastImporter(BaseImporter):
                         f"Progress: {progress:.1f}% - Inserted {inserted:,} of "
                         f"{len(cleaned_records):,} records ({records_per_sec:.1f} records/sec)"
                     )
-                
+
                 chunk_inserted = await self.bulk_insert(self.table, chunk)
                 inserted += chunk_inserted
-                
+
                 # Add a small delay between chunks to prevent overwhelming the database
                 if i < total_chunks - 1:  # Don't delay after the last chunk
                     await asyncio.sleep(0.1)  # 100ms delay between chunks
-            
+
             elapsed_time = (datetime.now() - start_time).total_seconds()
-            
+
             result = {
                 "status": "success" if not self.errors else "partial_success",
                 "records_processed": len(processed_records),
@@ -512,20 +518,20 @@ class FastImporter(BaseImporter):
                 "elapsed_time": elapsed_time,
                 "records_per_second": inserted / elapsed_time if elapsed_time > 0 else 0,
             }
-            
+
             self.logger.info(
                 f"Import completed. {inserted:,} records processed in {elapsed_time:.2f} seconds "
                 f"({result['records_per_second']:.1f} records/sec)"
             )
-            
+
             return result
-            
+
         except Exception as e:
             self.logger.error(f"Error during import: {e}")
             self.errors.append({"operation": "import", "error": str(e)})
-            
+
             elapsed_time = (datetime.now() - start_time).total_seconds()
-            
+
             return {
                 "status": "error",
                 "message": str(e),
@@ -535,9 +541,10 @@ class FastImporter(BaseImporter):
 
 # Run this module directly to test the importer
 if __name__ == "__main__":
+
     async def run_import():
         importer = FastImporter()
         result = await importer.import_data()
         print(result)
 
-    asyncio.run(run_import()) 
+    asyncio.run(run_import())

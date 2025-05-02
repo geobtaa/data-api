@@ -1,30 +1,28 @@
-import hashlib
 import json
 import logging
 import os
 import re
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
 
+import aiohttp
 import redis
 import requests
-import aiohttp
-
-from app.tasks.worker import fetch_and_cache_image
 
 logger = logging.getLogger(__name__)
 
+
 class ImageService:
     """Service for handling different types of image assets."""
-    
+
     def __init__(self, metadata: Dict[str, Any]):
         """
         Initialize the image service with document metadata.
-        
+
         Args:
             metadata: Document metadata dictionary
         """
         self.metadata = metadata
-        
+
         # Setup Redis connection
         self.redis_host = os.getenv("REDIS_HOST", "redis")
         self.redis_port = int(os.getenv("REDIS_PORT", 6379))
@@ -175,7 +173,7 @@ class ImageService:
     def get_thumbnail_url(self) -> Optional[str]:
         """
         Get the thumbnail URL from document metadata.
-        
+
         Returns:
             Thumbnail URL if available, None otherwise
         """
@@ -188,23 +186,23 @@ class ImageService:
                 except json.JSONDecodeError:
                     logger.error("Failed to parse references JSON")
                     return None
-                    
+
             # Look for IIIF thumbnail URL
             if "http://iiif.io/api/image" in references:
                 iiif_url = references["http://iiif.io/api/image"]
                 if isinstance(iiif_url, list) and iiif_url:
                     iiif_url = iiif_url[0]
                 return f"{iiif_url}/full/200,/0/default.jpg"
-                
+
             # Look for direct thumbnail URL
             if "http://schema.org/thumbnailUrl" in references:
                 thumbnail_url = references["http://schema.org/thumbnailUrl"]
                 if isinstance(thumbnail_url, list) and thumbnail_url:
                     return thumbnail_url[0]
                 return thumbnail_url
-                
+
             return None
-            
+
         except Exception as e:
             logger.error(f"Error getting thumbnail URL: {str(e)}")
             return None
@@ -225,20 +223,20 @@ class ImageService:
     async def get_iiif_image(self, image_url: str) -> Optional[bytes]:
         """
         Get image data from a IIIF image URL.
-        
+
         Args:
             image_url: The IIIF image URL
-            
+
         Returns:
             Image data in bytes, or None if retrieval fails
         """
         try:
             # Remove /info.json from URL if present
             base_url = image_url.replace("/info.json", "")
-            
+
             # Get a full-size image for better OCR results
             image_url = f"{base_url}/full/full/0/default.jpg"
-            
+
             async with aiohttp.ClientSession() as session:
                 async with session.get(image_url) as response:
                     if response.status == 200:
@@ -248,18 +246,18 @@ class ImageService:
                     else:
                         logger.error(f"Failed to retrieve IIIF image: {response.status}")
                         return None
-                        
+
         except Exception as e:
             logger.error(f"Error retrieving IIIF image: {str(e)}")
             return None
-            
+
     async def download_image(self, url: str) -> Optional[bytes]:
         """
         Download an image from a URL.
-        
+
         Args:
             url: The image URL
-            
+
         Returns:
             Image data in bytes, or None if download fails
         """
@@ -270,16 +268,18 @@ class ImageService:
                         # Check if it's an image
                         content_type = response.headers.get("content-type", "").lower()
                         if not content_type.startswith("image/"):
-                            logger.warning(f"URL {url} is not an image (content-type: {content_type})")
+                            logger.warning(
+                                f"URL {url} is not an image (content-type: {content_type})"
+                            )
                             return None
-                            
+
                         image_data = await response.read()
                         logger.info(f"Successfully downloaded image from {url}")
                         return image_data
                     else:
                         logger.error(f"Failed to download image: {response.status}")
                         return None
-                        
+
         except Exception as e:
             logger.error(f"Error downloading image: {str(e)}")
             return None

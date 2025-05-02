@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import os
@@ -6,10 +5,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import aiohttp
-from dotenv import load_dotenv
 import openai
-from openai import AsyncOpenAI
+from dotenv import load_dotenv
 
 from app.services.llm import GeoEntityIdentifier, SummaryGenerator
 
@@ -55,34 +52,37 @@ logger.debug("LLM Service debug logging enabled")
 
 class LLMService:
     """Service for interacting with OpenAI's LLM models."""
-    
-    def __init__(self):
+
+    def __init__(self, api_key: str = None):
         """Initialize the LLM service with OpenAI client."""
-        self.api_key = os.getenv('OPENAI_API_KEY')
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
-            
-        self.model = os.getenv('OPENAI_MODEL', 'gpt-4-vision-preview')
+
+        self.model = os.getenv("OPENAI_MODEL", "gpt-4-vision-preview")
         self.api_url = "https://api.openai.com/v1/chat/completions"
-        
+
         # Configure OpenAI
         openai.api_key = self.api_key
         openai.api_base = self.api_url
-        
+
         # Initialize the geo entity identifier
         self.geo_entity_identifier = GeoEntityIdentifier(
-            api_key=self.api_key,
-            model=self.model,
-            api_url=self.api_url
+            api_key=self.api_key, model=self.model, api_url=self.api_url
         )
-        
+
+        # Initialize the summary generator
+        self.summary_generator = SummaryGenerator(
+            api_key=self.api_key, model=self.model, api_url=self.api_url
+        )
+
     async def identify_geo_entities(self, text: str) -> List[Dict]:
         """
         Identify geographic entities in text using OpenAI's LLM.
-        
+
         Args:
             text: The text to analyze
-            
+
         Returns:
             List of dictionaries containing geographic entities and their metadata
         """
@@ -92,22 +92,23 @@ class LLMService:
         except Exception as e:
             logger.error(f"Error identifying geographic entities: {str(e)}")
             raise
-            
+
     async def perform_ocr(self, image_data: bytes) -> str:
         """
         Perform OCR on an image using OpenAI's vision model.
-        
+
         Args:
             image_data: The image data in bytes
-            
+
         Returns:
             Extracted text from the image
         """
         try:
             # Convert image data to base64
             import base64
-            image_base64 = base64.b64encode(image_data).decode('utf-8')
-            
+
+            image_base64 = base64.b64encode(image_data).decode("utf-8")
+
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -116,24 +117,22 @@ class LLMService:
                         "content": [
                             {
                                 "type": "text",
-                                "text": "Extract all text from this image. Include any dates, numbers, and special characters. Preserve the original formatting and line breaks."
+                                "text": "Extract all text from this image. Include any dates, numbers, and special characters. Preserve the original formatting and line breaks.",
                             },
                             {
                                 "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{image_base64}"
-                                }
-                            }
-                        ]
+                                "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
+                            },
+                        ],
                     }
                 ],
-                max_tokens=1000
+                max_tokens=1000,
             )
-            
+
             ocr_text = response.choices[0].message.content
-            logger.info(f"Successfully extracted text from image")
+            logger.info("Successfully extracted text from image")
             return ocr_text
-            
+
         except Exception as e:
             logger.error(f"Error performing OCR: {str(e)}")
             raise
@@ -275,12 +274,12 @@ class LLMService:
                 max_tokens=1000,  # Higher token limit for OCR text
                 top_p=0.8,
             )
-            
+
             ocr_text = response.choices[0].message.content
             logger.info(f"Successfully generated OCR text of length {len(ocr_text)}")
             logger.debug(f"Generated OCR text: {ocr_text}")
             return ocr_text, prompt, output_parser
-            
+
         except Exception as e:
             logger.error(f"Error generating OCR text with OpenAI API: {str(e)}")
             raise Exception(f"Error generating OCR text with OpenAI API: {str(e)}") from e

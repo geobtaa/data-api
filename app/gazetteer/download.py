@@ -28,12 +28,12 @@ from datetime import datetime
 # Fix imports to work both as a module and as a direct script
 try:
     # When run as a module (python -m app.gazetteer.download)
-    from app.gazetteer.downloaders import GeoNamesDownloader, WofDownloader, FastDownloader
+    from app.gazetteer.downloaders import FastDownloader, GeoNamesDownloader, WofDownloader
 except ModuleNotFoundError:
     # When run directly (python app/gazetteer/download.py)
     # Add the project root to the Python path
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-    from app.gazetteer.downloaders import GeoNamesDownloader, WofDownloader, FastDownloader
+    from app.gazetteer.downloaders import FastDownloader, GeoNamesDownloader, WofDownloader
 
 # Setup logging
 logging.basicConfig(

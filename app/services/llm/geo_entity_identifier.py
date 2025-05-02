@@ -15,7 +15,7 @@ class GeoEntityIdentifier:
         self.model = model
         self.api_url = api_url
         self.gazetteer_service = gazetteer_service
-        
+
         logger.info("Initialized GeoEntityIdentifier with local gazetteer service")
 
     async def identify_geo_entities(
@@ -53,15 +53,17 @@ class GeoEntityIdentifier:
         try:
             logger.info("Making API request to OpenAI")
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    self.api_url,
-                    headers=headers,
-                    json={
-                        "model": self.model,
-                        "messages": [{"role": "user", "content": prompt}],
-                        "temperature": 0.3,  # Lower temperature for more accurate entity identification
-                    },
-                ) as response:
+                async with (
+                    session.post(
+                        self.api_url,
+                        headers=headers,
+                        json={
+                            "model": self.model,
+                            "messages": [{"role": "user", "content": prompt}],
+                            "temperature": 0.3,  # Lower temperature for more accurate entity identification
+                        },
+                    ) as response
+                ):
                     logger.debug(f"API Response status: {response.status}")
                     if response.status != 200:
                         error_text = await response.text()
@@ -119,14 +121,35 @@ Additional Context:
 For each geographic entity, provide:
 1. The entity name as it appears in the text
 2. The type of entity (e.g., city, country, river, mountain)
-3. Any additional context that might help with disambiguation
+3. Any additional contextual metadata about the entity that might help with disambiguation
+4. Using the entity name, entity type, and context, attempt to rewrite the entity name to match OCLC's Fast Gazetteer
+
+OCLC Fast Gazetteer Names follow these formats:
+State Name
+State Name--County Name
+State Name--City Name
+State Name (State)--City Name
+State Name (State)--City Name--Borough Name
+
+Examples:
+California
+Minnesota
+New York
+Minnesota--Minneapolis
+California--San Francisco
+California--Los Angeles County
+New York (State)--Kings County
+New York (State)--New York
+New York (State)--New York--Brooklyn
 
 Format your response as a JSON array of objects with the following structure:
 [
   {{
     "name": "entity name",
     "type": "entity type",
-    "context": "additional context"
+    "context": "additional context",
+    "fast_approximation": "fast gazetteer name",
+    "fast_vectorized_name": ""
   }}
 ]"""
 

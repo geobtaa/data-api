@@ -1,5 +1,5 @@
 # data-api
-FastAPI JSON:API for BTAA Aardvark Metadata
+BTAA Geodata API
 
 ![Data API](docs/data-api.png)
 
@@ -134,7 +134,7 @@ GET /api/v1/cache/clear?cache_type=search|document|suggest|all
 
 ## AI Summarization
 
-The API uses OpenAI's ChatGPT API to generate summaries of historical maps and geographic datasets. To use this feature:
+The API uses OpenAI's ChatGPT API to generate summaries and identify geographic named entities of historical maps and geographic datasets. To use this feature:
 
 1. Set your OpenAI API key in the `.env` file:
 ```
@@ -143,6 +143,7 @@ OPENAI_MODEL=gpt-3.5-turbo
 ```
 
 2. The summarization service will automatically use this API key to generate summaries.
+3. The geo_entities service will use the same API to identify and extract geographic named entities from the content.
 
 ### Supported Asset Types
 
@@ -168,6 +169,28 @@ This will trigger an asynchronous task to generate a summary. You can retrieve t
 GET /api/v1/documents/{id}/summaries
 ```
 
+### Geographic Entity Extraction
+
+The API can identify and extract geographic named entities from documents. This includes:
+
+- Place names
+- Geographic coordinates
+- Administrative boundaries
+- Natural features
+- Historical place names
+
+To extract geographic entities:
+
+```
+POST /api/v1/documents/{id}/extract_entities
+```
+
+The response will include:
+- Extracted entities with confidence scores
+- Geographic coordinates when available
+- Links to gazetteer entries
+- Historical context when relevant
+
 ### Future Enhancements
 
 The following AI features are planned:
@@ -184,7 +207,7 @@ The following AI features are planned:
 
 #### BTAA Spatial Metadata
 
-Data from BTAA GIN.
+Data from BTAA GIN. @TODO add license.
 
 #### GeoNames
 
@@ -232,13 +255,14 @@ Data from Who's On First. [License](https://whosonfirst.org/docs/licenses/)
 - [X] Gazetteer - Geonames
 - [X] Gazetteer - OCLC Fast (Geographic)
 - [X] Gazetteer - Who's on First
-- [ ] Gazetteer - USGS Geographic Names Information System (GNIS)
+- [ ] Gazetteer - USGS Geographic Names Information System (GNIS), needed?
 - [ ] GeoJSONs
-- [ ] AI - Metadata summaries
+- [X] AI - Metadata summaries
+- [X] AI - Geographic entity extraction
+- [ ] AI - Subject enhancements
 - [ ] AI - Imagery - Summary
 - [ ] AI - Imagery - OCR'd text
 - [ ] AI - Tabular data summaries
-- [ ] AI - Subject enhancements
 - [ ] API - Analytics (PostHog?)
 - [ ] API - Authentication/Authorization for "Admin" endpoints
 - [ ] API - Throttling

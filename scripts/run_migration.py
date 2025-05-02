@@ -16,7 +16,6 @@ import argparse
 import logging
 import os
 import sys
-from pathlib import Path
 
 # Add the parent directory to the path so we can import the app modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -37,12 +36,12 @@ logger = logging.getLogger(__name__)
 def main():
     """
     Run the specified database migration.
-    
+
     This function:
     1. Parses command line arguments
     2. Executes the specified migration
     3. Logs the progress and results
-    
+
     Returns:
         int: 0 on success, 1 on error
     """
@@ -53,10 +52,10 @@ def main():
         choices=["add_fast_gazetteer"],
         help="The migration to run",
     )
-    
+
     # Parse command line arguments
     args = parser.parse_args()
-    
+
     try:
         # Execute the specified migration
         if args.migration == "add_fast_gazetteer":
@@ -66,9 +65,9 @@ def main():
         else:
             logger.error(f"Unknown migration: {args.migration}")
             return 1
-        
+
         return 0
-        
+
     except Exception as e:
         logger.error(f"Error running migration: {e}")
         return 1
@@ -76,4 +75,4 @@ def main():
 
 if __name__ == "__main__":
     # Run the main function and exit with appropriate status code
-    sys.exit(main()) 
+    sys.exit(main())

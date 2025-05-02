@@ -1,21 +1,21 @@
 import asyncio
 import logging
-from typing import Dict, Any
 from datetime import datetime
-import os
-from dotenv import load_dotenv
+from typing import Any, Dict
 
-from sqlalchemy import insert
 from celery import shared_task
+from dotenv import load_dotenv
+from sqlalchemy import insert
 
+from app.services.llm_service import LLMService
 from db.database import database
 from db.models import ai_enrichments
-from app.services.llm_service import LLMService
 
 # Load environment variables from .env file
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
 
 @shared_task(
     soft_time_limit=180,  # 3 minutes
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def generate_geo_entities(item_id: str, metadata: Dict[str, Any]):
     """
     Celery task to identify geographic entities in document metadata.
-    
+
     Args:
         item_id: The document ID
         metadata: Document metadata dictionary
@@ -35,13 +35,14 @@ def generate_geo_entities(item_id: str, metadata: Dict[str, Any]):
     # Create an event loop for the async function
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    
+
     try:
         # Run the async function
         return loop.run_until_complete(_identify_geo_entities(item_id, metadata))
     finally:
         # Clean up
         loop.close()
+
 
 async def store_geo_entities_in_db(
     document_id: str,
@@ -69,22 +70,19 @@ async def store_geo_entities_in_db(
         now = datetime.utcnow()
 
         # Create a structured response object with ISO format timestamps
-        response_data = {
-            'entities': entities,
-            'timestamp': now.isoformat()
-        }
+        response_data = {"entities": entities, "timestamp": now.isoformat()}
 
         # Create the enrichment record
         enrichment_data = {
-            'document_id': document_id,
-            'enrichment_type': 'geo_entities',
-            'ai_provider': 'OpenAI',
-            'model': model,
-            'prompt': prompt,
-            'output_parser': output_parser,
-            'response': response_data,
-            'created_at': now,
-            'updated_at': now,
+            "document_id": document_id,
+            "enrichment_type": "geo_entities",
+            "ai_provider": "OpenAI",
+            "model": model,
+            "prompt": prompt,
+            "output_parser": output_parser,
+            "response": response_data,
+            "created_at": now,
+            "updated_at": now,
         }
 
         # Insert the record into the database
@@ -102,38 +100,39 @@ async def store_geo_entities_in_db(
         if database.is_connected:
             await database.disconnect()
 
+
 async def _identify_geo_entities(item_id: str, metadata: Dict[str, Any]):
     """
     Async implementation of geographic entity identification.
     """
     try:
         logger.info(f"Starting geographic entity identification for document {item_id}")
-        
+
         # Initialize LLM service
         llm_service = LLMService()
-        
+
         # Combine all metadata fields into a single text for analysis
         # Skip any fields that are None or empty strings
         text_content = []
         for key, value in metadata.items():
             if value is not None and str(value).strip():
                 text_content.append(f"{key}: {value}")
-        
+
         if not text_content:
             logger.warning(f"No metadata content found for document {item_id}")
             return
-            
+
         combined_text = "\n".join(text_content)
-        
+
         # Use LLM service to identify geographic entities
         entities, prompt, output_parser = await llm_service.identify_geo_entities(combined_text)
-        
+
         # Store results in database
         await store_geo_entities_in_db(item_id, llm_service.model, entities, prompt, output_parser)
-            
+
         logger.info(f"Completed geographic entity identification for document {item_id}")
         return entities
-        
+
     except Exception as e:
         logger.error(f"Error in geographic entity identification for document {item_id}: {str(e)}")
         raise

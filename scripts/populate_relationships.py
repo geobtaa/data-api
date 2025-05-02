@@ -58,14 +58,14 @@ RELATIONSHIP_MAPPINGS = {
 async def populate_relationships():
     """
     Populate the document_relationships table with relationships from geoblacklight_development.
-    
+
     This function:
     1. Connects to the database
     2. Clears existing relationships
     3. Fetches all documents with relationship fields
     4. Processes each document and creates both primary and inverse relationships
     5. Tracks and logs the total number of relationships created
-    
+
     Raises:
         Exception: If there's an error during the population process
     """
