@@ -1,7 +1,8 @@
-from fastapi.responses import JSONResponse
-from typing import Any
 import json
 from datetime import datetime
+from typing import Any
+
+from fastapi.responses import JSONResponse
 
 
 def datetime_handler(obj):

@@ -1,13 +1,21 @@
-from sqlalchemy import (
-    Table, Column, String, Text, Integer, BigInteger, 
-    Numeric, Date, Boolean, MetaData, create_engine, 
-    inspect, ForeignKeyConstraint, Index
-)
-from sqlalchemy.schema import CreateTable
 import logging
-import os
 import sys
 from pathlib import Path
+
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Column,
+    Date,
+    Integer,
+    MetaData,
+    Numeric,
+    String,
+    Table,
+    Text,
+    create_engine,
+    inspect,
+)
 from sqlalchemy.sql import text
 
 # Add the project root directory to Python path
@@ -19,13 +27,14 @@ from db.config import DATABASE_URL
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def create_gazetteer_tables():
     """Create the gazetteer tables."""
     try:
         # Create engine and inspector
         engine = create_engine(DATABASE_URL)
         inspector = inspect(engine)
-        
+
         # Create MetaData instance
         metadata = MetaData()
 
@@ -189,13 +198,19 @@ def create_gazetteer_tables():
         with engine.connect() as conn:
             # Add compound index for state_abbv and namelsad on gazetteer_btaa
             if not inspector.has_index("gazetteer_btaa", "idx_state_abbv_namelsad"):
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     CREATE INDEX idx_state_abbv_namelsad ON gazetteer_btaa(state_abbv, namelsad);
-                """))
+                """
+                    )
+                )
                 logger.info("Created compound index on gazetteer_btaa(state_abbv, namelsad)")
-            
+
             # Add additional indexes for optimized querying
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE INDEX IF NOT EXISTS idx_geonames_name ON gazetteer_geonames(name);
                 CREATE INDEX IF NOT EXISTS idx_geonames_country_feature ON gazetteer_geonames(country_code, feature_class, feature_code);
                 CREATE INDEX IF NOT EXISTS idx_geonames_admin ON gazetteer_geonames(country_code, admin1_code, admin2_code);
@@ -206,7 +221,9 @@ def create_gazetteer_tables():
                 
                 CREATE INDEX IF NOT EXISTS idx_wof_names_name ON gazetteer_wof_names(name);
                 CREATE INDEX IF NOT EXISTS idx_wof_names_country ON gazetteer_wof_names(country);
-            """))
+            """
+                )
+            )
             conn.commit()
             logger.info("Created additional indexes for all gazetteer tables")
 
@@ -214,5 +231,6 @@ def create_gazetteer_tables():
         logger.error(f"Error creating gazetteer tables: {e}")
         raise
 
+
 if __name__ == "__main__":
-    create_gazetteer_tables() 
+    create_gazetteer_tables()

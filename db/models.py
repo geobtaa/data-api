@@ -1,4 +1,18 @@
-from sqlalchemy import Table, Column, String, Text, ARRAY, Boolean, TIMESTAMP, MetaData, Integer, BigInteger, Numeric, Date
+from sqlalchemy import (
+    ARRAY,
+    JSON,
+    TIMESTAMP,
+    BigInteger,
+    Boolean,
+    Column,
+    Date,
+    Integer,
+    MetaData,
+    Numeric,
+    String,
+    Table,
+    Text,
+)
 
 metadata = MetaData()
 
@@ -191,4 +205,54 @@ gazetteer_btaa = Table(
     Column("namelsad", String),
     Column("created_at", TIMESTAMP),
     Column("updated_at", TIMESTAMP),
+)
+
+# FAST gazetteer
+# Data source: OCLC ResearchWorks (https://researchworks.oclc.org/researchdata/fast/)
+# Attribution: OCLC FAST data is provided by OCLC under the OCLC ResearchWorks license.
+gazetteer_fast = Table(
+    "gazetteer_fast",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("fast_id", String, nullable=False, unique=True, index=True),
+    Column("uri", String, nullable=False),
+    Column("type", String, nullable=False),
+    Column("label", String, nullable=False),
+    Column("geoname_id", String),
+    Column("viaf_id", String),
+    Column("wikipedia_id", String),
+    Column("created_at", TIMESTAMP),
+    Column("updated_at", TIMESTAMP),
+)
+
+# FAST gazetteer embeddings
+# Stores vector embeddings for FAST gazetteer entries
+gazetteer_fast_embeddings = Table(
+    "gazetteer_fast_embeddings",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("fast_id", String, nullable=False, unique=True, index=True),
+    Column("label", String, nullable=False),
+    Column("geoname_id", String),
+    Column("viaf_id", String),
+    Column("wikipedia_id", String),
+    Column("embeddings", String, nullable=False),  # Will be cast to vector(1536) in the database
+    Column("created_at", TIMESTAMP),
+    Column("updated_at", TIMESTAMP),
+)
+
+# AI Enrichments table
+ai_enrichments = Table(
+    "ai_enrichments",
+    metadata,
+    Column("enrichment_id", Integer, primary_key=True, autoincrement=True),
+    Column("document_id", String, nullable=False, index=True),
+    Column("ai_provider", String, nullable=False),
+    Column("model", String, nullable=False),
+    Column("enrichment_type", String(50), nullable=False),
+    Column("prompt", JSON, nullable=True),
+    Column("output_parser", JSON, nullable=True),
+    Column("response", JSON, nullable=True),
+    Column("created_at", TIMESTAMP, nullable=False),
+    Column("updated_at", TIMESTAMP, nullable=False),
 )

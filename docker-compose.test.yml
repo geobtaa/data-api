@@ -1,0 +1,20 @@
+services:
+  paradedb_test:
+    image: paradedb/paradedb:latest
+    container_name: data-api-paradedb-test
+    env_file:
+      - .env.test
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=data-api-test
+    ports:
+      - "2346:5432"  # Different port from dev database
+    volumes:
+      - ./data/postgres_test:/var/lib/postgresql/data
+    networks:
+      - test_network
+
+networks:
+  test_network:
+    driver: bridge 

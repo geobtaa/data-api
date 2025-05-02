@@ -35,16 +35,20 @@ services:
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--log-level", "debug"]
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.0.0
     container_name: data-api-elasticsearch
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      - cluster.routing.allocation.disk.threshold_enabled=true
+      - cluster.routing.allocation.disk.watermark.low=85%
+      - cluster.routing.allocation.disk.watermark.high=90%
+      - cluster.routing.allocation.disk.watermark.flood_stage=95%
     ports:
       - "9200:9200"
     volumes:
-      - elasticsearch-data:/usr/share/elasticsearch/data
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
     networks:
       - elastic
     healthcheck:
@@ -54,7 +58,7 @@ services:
       retries: 5
 
   paradedb:
-    image: paradedb/paradedb:latest
+    image: paradedb/paradedb:0.15.14
     container_name: data-api-paradedb
     environment:
       - POSTGRES_USER=postgres
@@ -63,7 +67,7 @@ services:
     ports:
       - "2345:5432"
     volumes:
-      - paradedb-data:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data
     networks:
       - elastic
 
@@ -74,7 +78,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis-data:/data
+      - ./data/redis:/data
     networks:
       - elastic
     healthcheck:
@@ -87,17 +91,22 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A app.tasks.worker worker --loglevel=INFO
+    command: >
+      bash -c "apt-get update && apt-get install -y tesseract-ocr && celery -A app.tasks.worker worker --loglevel=INFO"
     environment:
+      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/geoblacklight_development
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_TTL=604800
       - PYTHONUNBUFFERED=1  # Important for logging
+      - LOG_LEVEL=DEBUG
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-3.5-turbo}
     volumes:
       - ./logs:/app/logs
-      - .:/app  # Mount code for development
     depends_on:
       - redis
+      - paradedb
     networks:
       - elastic
 
@@ -105,22 +114,28 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A app.tasks.worker flower --port=5555
+    command: >
+      bash -c "cd /app && celery -A app.tasks.worker flower --port=5555"
     ports:
       - "5555:5555"
     environment:
+      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/geoblacklight_development
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-    depends_on:
-      - redis
-      - celery_worker
+      - REDIS_TTL=604800
+      - PYTHONPATH=/app
+      - LOG_LEVEL=DEBUG
     networks:
       - elastic
+    depends_on:
+      - redis
+      - paradedb
+      - celery_worker
 
 volumes:
   elasticsearch-data:
   paradedb-data:
-  redis-data:  # Add Redis volume
+  redis-data:
 
 networks:
   elastic:

@@ -123,6 +123,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.test
 .venv
 env/
 venv/
@@ -161,8 +162,25 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+# Data
+
 # Gazetteer data
 data/gazetteers/**/*.csv
 data/gazetteers/**/*.txt
 data/gazetteers/**/*.db
 data/gazetteers/**/*.bz2
+data/gazetteers/**/*.marcxml
+
+# Elasticsearch data
+data/elasticsearch/*
+
+# Postgres data
+data/postgres/*
+data/postgres_test/*
+
+# Redis data
+data/redis/*
+
+
+
+

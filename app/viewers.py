@@ -1,6 +1,6 @@
-from typing import Dict, Optional, TypedDict, Union, List
 import json
 import re
+from typing import Dict, List, Optional, TypedDict, Union
 
 
 class Reference(TypedDict):

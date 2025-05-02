@@ -1,15 +1,17 @@
-from fastapi import HTTPException
-from .client import es
-from db.database import database
-from db.models import geoblacklight_development
-from app.services.viewer_service import create_viewer_attributes  # Updated import
-import os
-import time
-from sqlalchemy.sql import text
-from urllib.parse import urlencode
-from app.services.image_service import ImageService
 import json
 import logging
+import os
+import time
+from urllib.parse import urlencode
+
+from fastapi import HTTPException
+from sqlalchemy.sql import text
+
+from app.services.viewer_service import create_viewer_attributes  # Updated import
+from db.database import database
+from db.models import geoblacklight_development
+
+from .client import es
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,8 @@ def get_search_criteria(query: str, fq: dict, skip: int, limit: int, sort: list 
 async def search_documents(
     query: str = None, fq: dict = None, skip: int = 0, limit: int = 20, sort: list = None
 ):
-    """Search documents in Elasticsearch with optional filters, sorting, and spelling suggestions."""
+    """Search documents in Elasticsearch with optional filters, sorting, and spelling
+    suggestions."""
     # Ensure limit is not zero to avoid division by zero errors
     if limit <= 0:
         limit = 20  # Default to 20 if limit is zero or negative
@@ -49,89 +52,118 @@ async def search_documents(
                 else:
                     filter_clauses.append({"term": {field: values}})
 
-        search_query = {
-            "query": {
-                "bool": {
-                    "must": (
-                        [{"match_all": {}}]
-                        if not query
-                        else [
+        # Build the search query
+        if search_criteria.get("query"):
+            # Create a multi-match query that searches across multiple fields
+            search_query = {
+                "query": {
+                    "bool": {
+                        "must": [
                             {
                                 "multi_match": {
-                                    "query": query,
+                                    "query": search_criteria["query"],
                                     "fields": [
-                                        "dct_title_s^3",
-                                        "dct_description_sm^2",
-                                        "dct_creator_sm",
-                                        "dct_publisher_sm",
-                                        "dct_subject_sm",
-                                        "dcat_theme_sm",
-                                        "dcat_keyword_sm",
-                                        "dct_spatial_sm",
+                                        "dct_title_s^3",  # Boost title matches
+                                        "dct_description_sm^2",  # Boost description matches
+                                        "summary^2",  # Add summary field with boost
+                                        "dct_creator_sm^2",  # Boost creator name matches
+                                        "dct_subject_sm^1.5",  # Boost subject matches
+                                        "dcat_keyword_sm^1.5",  # Boost keyword matches
+                                        "dct_publisher_sm",  # Include publisher name
+                                        "schema_provider_s",  # Include provider name
+                                        "dct_spatial_sm",  # Include spatial name
+                                        "gbl_displaynote_sm",  # Include display notes
                                     ],
+                                    "type": "best_fields",
+                                    "operator": "and",
                                 }
                             }
-                        ]
-                    ),
-                    "filter": filter_clauses,
-                }
-            },
-            "from": skip,
-            "size": limit,
-            "sort": sort or [{"_score": "desc"}],
-            "aggs": {
-                "id_agg": {"terms": {"field": "id"}},
-                "spatial_agg": {"terms": {"field": "dct_spatial_sm"}},
-                "resource_class_agg": {"terms": {"field": "gbl_resourceclass_sm"}},
-                "resource_type_agg": {"terms": {"field": "gbl_resourcetype_sm"}},
-                "index_year_agg": {"terms": {"field": "gbl_indexyear_im"}},
-                "language_agg": {"terms": {"field": "dct_language_sm"}},
-                "creator_agg": {"terms": {"field": "dct_creator_sm"}},
-                "provider_agg": {"terms": {"field": "schema_provider_s"}},
-                "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
-                "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
-            },
-            "suggest": {
-                "text": query,
-                "simple_phrase": {
-                    "phrase": {
-                        "field": "dct_title_s",
-                        "size": 1,
-                        "gram_size": 3,
-                        "direct_generator": [
-                            {
-                                "field": "dct_title_s",
-                                "suggest_mode": "always"
-                            },
-                            {
-                                "field": "dct_description_sm",
-                                "suggest_mode": "always"
-                            },
                         ],
-                        "highlight": {
-                            "pre_tag": "<em>",
-                            "post_tag": "</em>"
-                        }
+                        "filter": filter_clauses,
                     }
-                }
+                },
+                "from": skip,
+                "size": limit,
+                "sort": sort or [{"_score": "desc"}],
+                "track_total_hits": True,
+                "aggs": {
+                    "id_agg": {"terms": {"field": "id"}},
+                    "spatial_agg": {"terms": {"field": "dct_spatial_sm"}},
+                    "resource_class_agg": {"terms": {"field": "gbl_resourceclass_sm"}},
+                    "resource_type_agg": {"terms": {"field": "gbl_resourcetype_sm"}},
+                    "index_year_agg": {"terms": {"field": "gbl_indexyear_im"}},
+                    "language_agg": {"terms": {"field": "dct_language_sm"}},
+                    "creator_agg": {"terms": {"field": "dct_creator_sm"}},
+                    "provider_agg": {"terms": {"field": "schema_provider_s"}},
+                    "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
+                    "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
+                },
             }
-        }
+
+            # Only add suggest if query is not empty
+            if search_criteria["query"].strip():
+                search_query["suggest"] = {
+                    "text": search_criteria["query"],
+                    "simple_phrase": {
+                        "phrase": {
+                            "field": "dct_title_s",
+                            "size": 1,
+                            "gram_size": 3,
+                            "direct_generator": [
+                                {"field": "dct_title_s", "suggest_mode": "always"},
+                                {"field": "dct_description_sm", "suggest_mode": "always"},
+                            ],
+                            "highlight": {"pre_tag": "<em>", "post_tag": "</em>"},
+                        }
+                    },
+                }
+        else:
+            search_query = {
+                "query": {"bool": {"must": [{"match_all": {}}], "filter": filter_clauses}},
+                "from": skip,
+                "size": limit,
+                "sort": sort or [{"_score": "desc"}],
+                "track_total_hits": True,
+                "aggs": {
+                    "id_agg": {"terms": {"field": "id"}},
+                    "spatial_agg": {"terms": {"field": "dct_spatial_sm"}},
+                    "resource_class_agg": {"terms": {"field": "gbl_resourceclass_sm"}},
+                    "resource_type_agg": {"terms": {"field": "gbl_resourcetype_sm"}},
+                    "index_year_agg": {"terms": {"field": "gbl_indexyear_im"}},
+                    "language_agg": {"terms": {"field": "dct_language_sm"}},
+                    "creator_agg": {"terms": {"field": "dct_creator_sm"}},
+                    "provider_agg": {"terms": {"field": "schema_provider_s"}},
+                    "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
+                    "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
+                },
+            }
 
         logger.debug(f"ES Query: {json.dumps(search_query, indent=2)}")
 
         try:
-            response = await es.search(index=index_name, body=search_query, track_total_hits=True)
+            response = await es.search(
+                index=index_name,
+                query=search_query["query"],
+                from_=skip,
+                size=limit,
+                sort=sort or [{"_score": "desc"}],
+                track_total_hits=True,
+                aggs=search_query["aggs"],
+                suggest=search_query.get("suggest"),  # Only include suggest if it exists
+            )
         except Exception as es_error:
             logger.error(f"Elasticsearch error: {str(es_error)}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "message": "Elasticsearch query failed",
-                    "error": str(es_error),
-                    "query": search_query,
-                    "index": index_name,
-                },
-            )
+            error_detail = {
+                "message": "Elasticsearch query failed",
+                "error": str(es_error),
+                "query": search_query,
+                "index": index_name,
+            }
+            if hasattr(es_error, "info"):
+                error_detail["info"] = es_error.info
+            if hasattr(es_error, "status_code"):
+                error_detail["status_code"] = es_error.status_code
+            raise HTTPException(status_code=500, detail=error_detail) from es_error
 
         logger.info(f"ES Response status: {response.meta.status}")
 
@@ -162,7 +194,9 @@ def get_sort_options(search_criteria):
             "id": "relevance",
             "attributes": {"label": "Relevance"},
             "links": {
-                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'relevance'}, doseq=True)}"
+                "self": (
+                    f"{base_url}?{urlencode({**current_params, 'sort': 'relevance'}, doseq=True)}"
+                )
             },
         },
         {
@@ -170,7 +204,9 @@ def get_sort_options(search_criteria):
             "id": "year_desc",
             "attributes": {"label": "Year (Newest first)"},
             "links": {
-                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'year_desc'}, doseq=True)}"
+                "self": (
+                    f"{base_url}?{urlencode({**current_params, 'sort': 'year_desc'}, doseq=True)}"
+                )
             },
         },
         {
@@ -178,7 +214,9 @@ def get_sort_options(search_criteria):
             "id": "year_asc",
             "attributes": {"label": "Year (Oldest first)"},
             "links": {
-                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'year_asc'}, doseq=True)}"
+                "self": (
+                    f"{base_url}?{urlencode({**current_params, 'sort': 'year_asc'}, doseq=True)}"
+                )
             },
         },
         {
@@ -186,7 +224,9 @@ def get_sort_options(search_criteria):
             "id": "title_asc",
             "attributes": {"label": "Title (A-Z)"},
             "links": {
-                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'title_asc'}, doseq=True)}"
+                "self": (
+                    f"{base_url}?{urlencode({**current_params, 'sort': 'title_asc'}, doseq=True)}"
+                )
             },
         },
         {
@@ -194,7 +234,9 @@ def get_sort_options(search_criteria):
             "id": "title_desc",
             "attributes": {"label": "Title (Z-A)"},
             "links": {
-                "self": f"{base_url}?{urlencode({**current_params, 'sort': 'title_desc'}, doseq=True)}"
+                "self": (
+                    f"{base_url}?{urlencode({**current_params, 'sort': 'title_desc'}, doseq=True)}"
+                )
             },
         },
     ]
@@ -204,38 +246,40 @@ def get_sort_options(search_criteria):
 async def process_search_response(response, limit, skip, search_criteria):
     """Process Elasticsearch response and format for API output."""
     try:
-        total_hits = response.body["hits"]["total"]["value"]
+        total_hits = response["hits"]["total"]["value"]
         logger.debug(f"Total hits: {total_hits}")
 
-        document_ids = [hit["_source"]["id"] for hit in response.body["hits"]["hits"]]
+        document_ids = [hit["_source"]["id"] for hit in response["hits"]["hits"]]
         logger.debug(f"Found document IDs: {document_ids}")
 
         # Process spelling suggestions
         suggestions = []
-        if "suggest" in response.body:
-            simple_phrase = response.body["suggest"].get("simple_phrase", [])
+        if "suggest" in response:
+            simple_phrase = response["suggest"].get("simple_phrase", [])
             for suggestion in simple_phrase:
                 if suggestion.get("options"):
                     for option in suggestion["options"]:
-                        suggestions.append({
-                            "text": option.get("text"),
-                            "highlighted": option.get("highlighted"),
-                            "score": option.get("score")
-                        })
+                        suggestions.append(
+                            {
+                                "text": option.get("text"),
+                                "highlighted": option.get("highlighted"),
+                                "score": option.get("score"),
+                            }
+                        )
 
         if not document_ids:
             logger.debug("No documents found")
             return {
                 "status": "success",
                 "query_time": {
-                    "elasticsearch": response.body["took"].__str__() + "ms",
+                    "elasticsearch": response["took"].__str__() + "ms",
                     "postgresql": "0ms",
                 },
                 "meta": {
                     "pages": {
                         "current_page": (skip // limit) + 1,
                         "next_page": None,
-                        "prev_page": ((skip // limit)) if skip > 0 else None,
+                        "prev_page": (skip // limit) if skip > 0 else None,
                         "total_pages": 0,
                         "limit_value": limit,
                         "offset_value": skip,
@@ -243,7 +287,7 @@ async def process_search_response(response, limit, skip, search_criteria):
                         "first_page?": True,
                         "last_page?": True,
                     },
-                    "suggestions": suggestions  # Add suggestions to meta
+                    "suggestions": suggestions,  # Add suggestions to meta
                 },
                 "data": [],
                 "included": [],
@@ -275,7 +319,7 @@ async def process_search_response(response, limit, skip, search_criteria):
                     "id": doc["id"],
                     "score": next(
                         hit["_score"]
-                        for hit in response.body["hits"]["hits"]
+                        for hit in response["hits"]["hits"]
                         if hit["_source"]["id"] == doc["id"]
                     ),
                     "attributes": {**doc, **create_viewer_attributes(doc)},
@@ -285,29 +329,33 @@ async def process_search_response(response, limit, skip, search_criteria):
         pg_query_time = (time.time() - start_time) * 1000
 
         included = [
-            *process_aggregations(response.body.get("aggregations", {}), search_criteria),
+            *process_aggregations(response.get("aggregations", {}), search_criteria),
             *get_sort_options(search_criteria),
         ]
 
         return {
             "status": "success",
             "query_time": {
-                "elasticsearch": response.body["took"].__str__() + "ms",
+                "elasticsearch": response["took"].__str__() + "ms",
                 "postgresql": f"{round(pg_query_time)}ms",
             },
             "meta": {
                 "pages": {
                     "current_page": (skip // limit) + 1,
                     "next_page": ((skip // limit) + 2) if (skip + limit) < total_hits else None,
-                    "prev_page": ((skip // limit)) if skip > 0 else None,
-                    "total_pages": (total_hits // limit) + (1 if total_hits % limit > 0 else 0) if limit > 0 else 0,
+                    "prev_page": (skip // limit) if skip > 0 else None,
+                    "total_pages": (
+                        (total_hits // limit) + (1 if total_hits % limit > 0 else 0)
+                        if limit > 0
+                        else 0
+                    ),
                     "limit_value": limit,
                     "offset_value": skip,
                     "total_count": total_hits,
                     "first_page?": (skip == 0),
                     "last_page?": (skip + limit) >= total_hits,
                 },
-                "suggestions": suggestions  # Add suggestions to meta
+                "suggestions": suggestions,  # Add suggestions to meta
             },
             "data": processed_documents,
             "included": included,
@@ -319,11 +367,11 @@ async def process_search_response(response, limit, skip, search_criteria):
         error_trace = traceback.format_exc()
         logger.error(f"Process response error: {str(e)}", exc_info=True)
         logger.error(f"Full traceback:\n{error_trace}")
-        logger.error(f"Response body: {response.body}")
+        logger.error(f"Response body: {response}")
         raise HTTPException(
             status_code=500,
-            detail={"error": str(e), "traceback": error_trace, "response": response.body},
-        )
+            detail={"error": str(e), "traceback": error_trace, "response": response},
+        ) from e
 
 
 def process_aggregations(aggregations, search_criteria):

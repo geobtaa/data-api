@@ -1,6 +1,7 @@
-import psycopg2
-import pandas as pd
 import os
+
+import pandas as pd
+import psycopg2
 from tqdm import tqdm
 
 # List available CSV files in the fixtures directory
@@ -30,13 +31,11 @@ data = pd.read_csv(csv_file_path, low_memory=False)
 
 # Connect to PostgreSQL using environment variables
 conn = psycopg2.connect(
-    dbname=os.getenv(
-        "DB_NAME", "geoblacklight_development"
-    ),  # Default to 'geoblacklight_development' if not set
-    user=os.getenv("DB_USER", "postgres"),  # Default to 'postgres' if not set
-    password=os.getenv("DB_PASSWORD", "postgres"),  # Default to 'postgres' if not set
-    host=os.getenv("DB_HOST", "localhost"),  # Default to 'localhost' if not set
-    port=os.getenv("DB_PORT", "2345"),  # Default to '2345' if not set
+    dbname=os.getenv("POSTGRES_DB", "geoblacklight_development"),
+    user=os.getenv("POSTGRES_USER", "postgres"),
+    password=os.getenv("POSTGRES_PASSWORD", "postgres"),
+    host=os.getenv("POSTGRES_HOST", "paradedb"),  # Use the Docker service name
+    port=os.getenv("POSTGRES_PORT", "5432"),  # Use the internal Docker port
 )
 cursor = conn.cursor()
 
@@ -107,11 +106,14 @@ def convert_to_array(value):
     return value.split("|")
 
 
-# Function to convert values to boolean
-def convert_to_boolean(value):
+# Function to convert pipe-delimited strings to integer arrays
+def convert_to_int_array(value):
     if pd.isna(value):
         return None
-    return bool(value)
+    try:
+        return [int(x) for x in value.split("|") if x.strip().isdigit()]
+    except (ValueError, AttributeError):
+        return None
 
 
 # Function to handle NaN values
@@ -121,11 +123,13 @@ def handle_nan(value):
     return value
 
 
-# Function to convert pipe-delimited strings to arrays of integers
-def convert_to_int_array(value):
+# Function to convert string boolean values to actual booleans
+def convert_to_boolean(value):
     if pd.isna(value):
         return None
-    return [int(x) for x in value.split("|") if x.isdigit()]
+    if isinstance(value, str):
+        return value.lower() == "true"
+    return bool(value)
 
 
 # Define the insert query with ON CONFLICT to skip duplicates
@@ -151,10 +155,10 @@ batch_size = 1000  # Adjust the batch size as needed
 batch = []
 
 print("Inserting records into the database...")
-for index, row in tqdm(data.iterrows(), total=data.shape[0], desc="Progress"):
+for _, row in tqdm(data.iterrows(), total=len(data)):
     batch.append(
         (
-            handle_nan(row["id"]),
+            row["id"],
             handle_nan(row["dct_title_s"]),
             convert_to_array(row["dct_alternative_sm"]),
             convert_to_array(row["dct_description_sm"]),

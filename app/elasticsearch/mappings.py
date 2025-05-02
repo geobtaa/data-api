@@ -30,6 +30,7 @@ INDEX_MAPPING = {
             "dcat_centroid": {"type": "geo_point"},
             "dct_references_s": {"type": "object"},
             "gbl_mdmodified_dt": {"type": "date"},
+            "summary": {"type": "text"},
             "suggest": {
                 "type": "completion",
                 "analyzer": "simple",

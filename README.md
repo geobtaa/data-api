@@ -1,11 +1,24 @@
 # data-api
-FastAPI JSON:API for BTAA Aardvark Metadata
+BTAA Geodata API
 
 ![Data API](docs/data-api.png)
 
 ## Development
 
-Install dependencies:
+Install dependencies using `uv` (recommended):
+```bash
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create and activate a virtual environment
+uv venv
+source .venv/bin/activate
+
+# Install dependencies
+uv pip install -r requirements.txt
+```
+
+Alternatively, you can use pip:
 ```bash
 pip install -r requirements.txt
 ```
@@ -18,10 +31,35 @@ cp .env.example .env
 
 Run the Docker containers:
 
-* [ParadeDB](https://www.paradedb.com/)
-* [Elasticsearch](https://www.elastic.co/elasticsearch/)
-* [Redis](https://redis.io/) (for caching)
+The application uses several services:
 
+* [ParadeDB](https://www.paradedb.com/) (PostgreSQL-compatible database)
+  - Port: 2345
+  - Default credentials: postgres/postgres
+  - Database: geoblacklight_development
+
+* [Elasticsearch](https://www.elastic.co/elasticsearch/) (Search engine)
+  - Port: 9200
+  - Single-node configuration
+  - Security disabled for development
+  - 2GB memory allocation
+
+* [Redis](https://redis.io/) (Caching and message broker)
+  - Port: 6379
+  - Persistence enabled
+  - Used for API caching and Celery tasks
+
+* [Celery Worker](https://docs.celeryq.dev/) (Background task processor)
+  - Processes asynchronous tasks
+  - Connected to Redis and ParadeDB
+  - Logs available in ./logs directory
+
+* [Flower](https://flower.readthedocs.io/) (Celery monitoring)
+  - Port: 5555
+  - Web interface for monitoring Celery tasks
+  - Access at http://localhost:5555
+
+Start all services:
 ```bash
 docker compose up -d
 ```
@@ -94,25 +132,96 @@ You can manually clear the cache using:
 GET /api/v1/cache/clear?cache_type=search|document|suggest|all
 ```
 
+## AI Summarization
+
+The API uses OpenAI's ChatGPT API to generate summaries and identify geographic named entities of historical maps and geographic datasets. To use this feature:
+
+1. Set your OpenAI API key in the `.env` file:
+```
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-3.5-turbo
+```
+
+2. The summarization service will automatically use this API key to generate summaries.
+3. The geo_entities service will use the same API to identify and extract geographic named entities from the content.
+
+### Supported Asset Types
+
+The API can process various types of assets to enhance summaries:
+
+- **IIIF Images**: Extracts metadata and visual content from IIIF image services
+- **IIIF Manifests**: Processes IIIF manifests to extract metadata, labels, and descriptions
+- **Cloud Optimized GeoTIFFs (COG)**: Extracts geospatial metadata from COG files
+- **PMTiles**: Processes PMTiles assets to extract tile information
+- **Downloadable Files**: Processes various file types (Shapefiles, Geodatabases, etc.)
+
+### Generating Summaries
+
+To generate a summary for a document:
+
+```
+POST /api/v1/documents/{id}/summarize
+```
+
+This will trigger an asynchronous task to generate a summary. You can retrieve the summary using:
+
+```
+GET /api/v1/documents/{id}/summaries
+```
+
+### Geographic Entity Extraction
+
+The API can identify and extract geographic named entities from documents. This includes:
+
+- Place names
+- Geographic coordinates
+- Administrative boundaries
+- Natural features
+- Historical place names
+
+To extract geographic entities:
+
+```
+POST /api/v1/documents/{id}/extract_entities
+```
+
+The response will include:
+- Extracted entities with confidence scores
+- Geographic coordinates when available
+- Links to gazetteer entries
+- Historical context when relevant
+
+### Future Enhancements
+
+The following AI features are planned:
+
+- Metadata summaries
+- Imagery summaries
+- Tabular data summaries
+- OCR text extraction
+- Subject enhancements
+
 ## Colophon
 
 ### Gazetteers
 
 #### BTAA Spatial Metadata
 
-Data from BTAA GIN.
+Data from BTAA GIN. @TODO add license.
 
 #### GeoNames
 
 Data from GeoNames. [License - CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+
+#### OCLC FAST Geographic
+
+Data from FAST (Faceted Application of Subject Terminology) which is made available by OCLC Online Computer Library Center, Inc. under the [License - ODC Attribution License](https://www.oclc.org/research/areas/data-science/fast/odcby.html).
 
 #### Who's On First
 
 Data from Who's On First. [License](https://whosonfirst.org/docs/licenses/)
 
 ## TODO
-
-X = done; O = in progress
 
 - [X] Docker Image - Published on Docker Hub
 - [X] Search - basic search across all text fields
@@ -144,6 +253,16 @@ X = done; O = in progress
 - [ ] Item View - similar images (vector imagery search)
 - [X] Gazetteer - BTAA Spatial
 - [X] Gazetteer - Geonames
+- [X] Gazetteer - OCLC Fast (Geographic)
 - [X] Gazetteer - Who's on First
-- [ ] Gazetteer - USGS Geographic Names Information System (GNIS)
+- [ ] Gazetteer - USGS Geographic Names Information System (GNIS), needed?
 - [ ] GeoJSONs
+- [X] AI - Metadata summaries
+- [X] AI - Geographic entity extraction
+- [ ] AI - Subject enhancements
+- [ ] AI - Imagery - Summary
+- [ ] AI - Imagery - OCR'd text
+- [ ] AI - Tabular data summaries
+- [ ] API - Analytics (PostHog?)
+- [ ] API - Authentication/Authorization for "Admin" endpoints
+- [ ] API - Throttling

@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Search endpointAPI Response",
+  "type": "object",
+  "required": ["status", "query_time", "meta", "data"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["success", "error"]
+    },
+    "query_time": {
+      "type": "object",
+      "required": ["cache", "elasticsearch", "document_processing", "total_response_time"],
+      "properties": {
+        "cache": { "type": "string" },
+        "elasticsearch": { "type": "string" },
+        "document_processing": {
+          "type": "object",
+          "properties": {
+            "total": { "type": "string" },
+            "per_document": { "type": "string" },
+            "thumbnail_service": { "type": "string" },
+            "citation_service": { "type": "string" },
+            "viewer_service": { "type": "string" }
+          }
+        },
+        "total_response_time": { "type": "string" }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "required": ["pages", "spelling_suggestions"],
+      "properties": {
+        "pages": {
+          "type": "object",
+          "required": ["current_page", "total_pages", "total_count"],
+          "properties": {
+            "current_page": { "type": "integer" },
+            "next_page": { "type": ["integer", "null"] },
+            "prev_page": { "type": ["integer", "null"] },
+            "total_pages": { "type": "integer" },
+            "limit_value": { "type": "integer" },
+            "offset_value": { "type": "integer" },
+            "total_count": { "type": "integer" },
+            "first_page?": { "type": "boolean" },
+            "last_page?": { "type": "boolean" }
+          }
+        },
+        "spelling_suggestions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "data": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "id", "score", "attributes"],
+        "properties": {
+          "type": { "type": "string" },
+          "id": { "type": "string" },
+          "score": { "type": ["number", "integer"] },
+          "attributes": {
+            "type": "object"
+            // optionally define known Aardvark fields here
+          }
+        }
+      }
+    },
+    "included": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "id", "attributes"],
+        "properties": {
+          "type": { "type": "string" },
+          "id": { "type": "string" },
+          "attributes": { "type": "object" }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

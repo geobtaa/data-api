@@ -1,14 +1,23 @@
-from elasticsearch import AsyncElasticsearch
-from dotenv import load_dotenv
-import os
 import logging
+import os
+
+from dotenv import load_dotenv
+from elasticsearch import AsyncElasticsearch
 
 load_dotenv()
 
-# Create the AsyncElasticsearch client
-es = AsyncElasticsearch(os.getenv("ELASTICSEARCH_URL", "http://elasticsearch:9200"))
+# Create the AsyncElasticsearch client with minimal settings
+es = AsyncElasticsearch(
+    os.getenv("ELASTICSEARCH_URL", "http://elasticsearch:9200"),
+    verify_certs=False,  # For development only
+    ssl_show_warn=False,  # For development only
+    request_timeout=60,  # Increase timeout to 60 seconds
+    retry_on_timeout=True,  # Retry on timeout
+    max_retries=3,  # Maximum number of retries
+)
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 async def init_elasticsearch():
@@ -20,7 +29,7 @@ async def init_elasticsearch():
     try:
         # Test the connection
         info = await es.info()
-        logger.info(f"Connected to Elasticsearch cluster: {info.body['cluster_name']}")
+        logger.info(f"Connected to Elasticsearch cluster: {info['cluster_name']}")
 
         # Check if index exists
         exists = await es.indices.exists(index=index_name)
@@ -28,7 +37,8 @@ async def init_elasticsearch():
             logger.info(f"Creating index {index_name}")
             await es.indices.create(
                 index=index_name,
-                body={"mappings": INDEX_MAPPING["mappings"], "settings": INDEX_MAPPING["settings"]},
+                mappings=INDEX_MAPPING["mappings"],
+                settings=INDEX_MAPPING["settings"],
             )
         else:
             logger.info(f"Index {index_name} already exists")
