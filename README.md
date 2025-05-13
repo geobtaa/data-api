@@ -14,16 +14,21 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv venv
 source .venv/bin/activate
 
-# Install dependencies using the lockfile for reproducible builds
-uv pip install -e . --lockfile uv.lock
+# Install dependencies
+uv pip install -e .
 
 # For development dependencies (including testing and linting tools)
-uv pip install -e ".[dev]" --lockfile uv.lock
+uv pip install -e ".[dev]"
 ```
 
-To update dependencies and regenerate the lockfile:
+To generate or update the lockfile:
 ```bash
 uv pip compile pyproject.toml -o uv.lock
+```
+
+To install dependencies from the lockfile:
+```bash
+uv pip install --requirements uv.lock
 ```
 
 Alternatively, you can use pip:
