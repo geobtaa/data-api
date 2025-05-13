@@ -8,12 +8,11 @@ from elasticsearch import AsyncElasticsearch
 from app.elasticsearch.client import close_elasticsearch, init_elasticsearch
 from app.elasticsearch.mappings import INDEX_MAPPING
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env.test file
+load_dotenv(".env.test")
 
-# Set up test environment variables with a fixed test index name
-TEST_INDEX_NAME = "test_geoblacklight"
-os.environ["ELASTICSEARCH_INDEX"] = TEST_INDEX_NAME
+# Get the test index name from environment variables
+TEST_INDEX_NAME = os.getenv("ELASTICSEARCH_INDEX", "data_api_test")
 
 # Use the ELASTICSEARCH_URL from .env file or default to localhost
 ELASTICSEARCH_URL = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
@@ -37,17 +36,22 @@ async def es_client():
         info = await client.info()
         print(f"Connected to Elasticsearch cluster: {info['cluster_name']}")
 
-        # Delete the test index if it exists (cleanup from previous failed runs)
+        # Delete the test index if it exists
         if await client.indices.exists(index=TEST_INDEX_NAME):
             await client.indices.delete(index=TEST_INDEX_NAME)
+            print(f"Deleted existing test index {TEST_INDEX_NAME}")
 
         yield client
 
-        # Clean up - always delete our test index
-        if await client.indices.exists(index=TEST_INDEX_NAME):
-            await client.indices.delete(index=TEST_INDEX_NAME)
-            print(f"Deleted test index {TEST_INDEX_NAME}")
     finally:
+        # Clean up - delete the test index
+        try:
+            if await client.indices.exists(index=TEST_INDEX_NAME):
+                await client.indices.delete(index=TEST_INDEX_NAME)
+                print(f"Cleaned up test index {TEST_INDEX_NAME}")
+        except Exception as e:
+            print(f"Error cleaning up test index: {e}")
+        
         # Always close the client
         await client.close()
 
@@ -72,8 +76,11 @@ async def test_init_elasticsearch_index_exists(es_client, monkeypatch):
     """Test initialization when index already exists."""
     # Monkeypatch the global ES client to use our test client
     import app.elasticsearch.client
-
     monkeypatch.setattr(app.elasticsearch.client, "es", es_client)
+
+    # Delete the index if it exists
+    if await es_client.indices.exists(index=TEST_INDEX_NAME):
+        await es_client.indices.delete(index=TEST_INDEX_NAME)
 
     # Create the index first
     await es_client.indices.create(
@@ -87,6 +94,9 @@ async def test_init_elasticsearch_index_exists(es_client, monkeypatch):
 
     # Verify the index still exists
     assert await es_client.indices.exists(index=TEST_INDEX_NAME)
+
+    # Clean up - delete the index
+    await es_client.indices.delete(index=TEST_INDEX_NAME)
 
 
 @pytest.mark.asyncio

@@ -25,10 +25,21 @@ INDEX_MAPPING = {
             "dct_temporal_sm": {"type": "text"},
             "dct_issued_s": {"type": "text"},
             "gbl_daterange_drsim": {"type": "text"},
-            "locn_geometry": {"type": "geo_shape"},
-            "dcat_bbox": {"type": "geo_shape"},
+            "locn_geometry": {
+                "type": "geo_shape",
+                "orientation": "counterclockwise",
+                "coerce": True
+            },
+            "dcat_bbox": {
+                "type": "geo_shape",
+                "orientation": "counterclockwise",
+                "coerce": True
+            },
             "dcat_centroid": {"type": "geo_point"},
-            "dct_references_s": {"type": "object"},
+            "dct_references_s": {
+                "type": "object",
+                "enabled": False
+            },
             "gbl_mdmodified_dt": {"type": "date"},
             "summary": {"type": "text"},
             "suggest": {

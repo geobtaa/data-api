@@ -62,8 +62,8 @@
           "id": { "type": "string" },
           "score": { "type": ["number", "integer"] },
           "attributes": {
-            "type": "object"
-            // optionally define known Aardvark fields here
+            "type": "object",
+            "description": "Aardvark fields will be defined here"
           }
         }
       }

@@ -1,5 +1,8 @@
 from unittest.mock import MagicMock, patch
 
+import json
+from jsonschema import validate
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -115,6 +118,14 @@ async def test_search_endpoint(mock_search_documents, mock_search_response):
     assert kwargs["query"] == "test"
     assert kwargs["skip"] == 0
     assert kwargs["limit"] == 10
+    
+    # Test the response is valid against the search schema
+    # Load the schema
+    with open("data/schemas/search.schema.json") as f:
+        schema = json.load(f)
+    
+    # Validate response against schema
+    validate(instance=data, schema=schema)
 
 
 @pytest.mark.asyncio

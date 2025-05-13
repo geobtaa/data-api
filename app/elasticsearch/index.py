@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 
 from db.database import database
 from db.models import geoblacklight_development
@@ -175,15 +176,47 @@ def process_geometry(geometry):
     try:
         # Try to parse as GeoJSON
         if isinstance(geometry, str):
-            geometry = json.loads(geometry)
+            # Check if it's an ENVELOPE format (case insensitive)
+            envelope_match = re.match(
+                r"ENVELOPE\(([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\)",
+                geometry,
+                re.IGNORECASE
+            )
+            if envelope_match:
+                # Extract coordinates from ENVELOPE(minx,maxx,maxy,miny)
+                minx, maxx, maxy, miny = map(float, envelope_match.groups())
+                # Create a polygon from the envelope coordinates in counterclockwise order
+                return {
+                    "type": "polygon",
+                    "coordinates": [
+                        [
+                            [minx, miny],  # bottom left
+                            [maxx, miny],  # bottom right
+                            [maxx, maxy],  # top right
+                            [minx, maxy],  # top left
+                            [minx, miny],  # close the polygon
+                        ]
+                    ],
+                }
+            
+            # Try to parse as JSON
+            try:
+                geometry = json.loads(geometry)
+            except json.JSONDecodeError:
+                return None
 
         # Handle different geometry types
-        if geometry.get("type") == "Point":
-            return {"type": "point", "coordinates": geometry.get("coordinates", [0, 0])}
-        elif geometry.get("type") in ["Polygon", "MultiPolygon"]:
-            return geometry
+        if isinstance(geometry, dict):
+            geom_type = geometry.get("type", "").lower()
+            if geom_type == "point":
+                return {"type": "point", "coordinates": geometry.get("coordinates", [0, 0])}
+            elif geom_type in ["polygon", "multipolygon"]:
+                return {"type": geom_type, "coordinates": geometry["coordinates"]}
+            else:
+                return None
         else:
             return None
+
     except Exception:
         return None
 
