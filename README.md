@@ -1,5 +1,4 @@
-# data-api
-BTAA Geodata API
+# BTAA GeoMetadata API
 
 ![Data API](docs/data-api.png)
 
@@ -29,13 +28,6 @@ uv pip compile pyproject.toml -o uv.lock
 To install dependencies from the lockfile:
 ```bash
 uv pip install --requirements uv.lock
-```
-
-Alternatively, you can use pip:
-```bash
-pip install -e .
-# For development dependencies
-pip install -e ".[dev]"
 ```
 
 The default settings should work for local development, but if you need to tweak the environment variables, you can do so by copying the `.env.example` file to `.env` and making your changes.
