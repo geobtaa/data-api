@@ -9,10 +9,10 @@ The gazetteer data management system consists of two main components:
 2. Importers - Scripts to load the prepared data into the database
 
 Currently supported gazetteers:
-- Who's on First (WOF)
+- BTAA Placenames
 - GeoNames
-- BTAA Geoportal
 - OCLC FAST Geographic (FAST)
+- Who's on First (WOF)
 
 ## Prerequisites
 
@@ -60,6 +60,19 @@ Where `[gazetteer_name]` can be:
 
 ### Gazetteer-Specific Notes
 
+#### BTAA Geoportal
+1. Downloads BTAA Geoportal data
+2. Processes it into the required format
+
+#### GeoNames
+1. Downloads US-specific GeoNames data
+2. Extracts and processes the data into a tab-delimited format
+
+#### OCLC FAST (Faceted Application of Subject Terminology)
+1. Downloads the FAST Geographic MARCXML dataset
+2. Extracts the MARCXML file from the ZIP archive
+3. Stores the MARCXML file in the data directory for processing by the importer
+
 #### Who's on First (WOF)
 1. Downloads the SQLite database
 2. Exports the following tables to CSV:
@@ -68,19 +81,6 @@ Where `[gazetteer_name]` can be:
    - concordances.csv
    - names.csv
    - geojson.csv
-
-#### GeoNames
-1. Downloads US-specific GeoNames data
-2. Extracts and processes the data into a tab-delimited format
-
-#### BTAA Geoportal
-1. Downloads BTAA Geoportal data
-2. Processes it into the required format
-
-#### FAST (Faceted Application of Subject Terminology)
-1. Downloads the FAST Geographic MARCXML dataset
-2. Extracts the MARCXML file from the ZIP archive
-3. Stores the MARCXML file in the data directory for processing by the importer
 
 ## Importing Data
 
