@@ -14,13 +14,23 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv venv
 source .venv/bin/activate
 
-# Install dependencies
-uv pip install -r requirements.txt
+# Install dependencies using the lockfile for reproducible builds
+uv pip install -e . --lockfile uv.lock
+
+# For development dependencies (including testing and linting tools)
+uv pip install -e ".[dev]" --lockfile uv.lock
+```
+
+To update dependencies and regenerate the lockfile:
+```bash
+uv pip compile pyproject.toml -o uv.lock
 ```
 
 Alternatively, you can use pip:
 ```bash
-pip install -r requirements.txt
+pip install -e .
+# For development dependencies
+pip install -e ".[dev]"
 ```
 
 The default settings should work for local development, but if you need to tweak the environment variables, you can do so by copying the `.env.example` file to `.env` and making your changes.
