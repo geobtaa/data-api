@@ -11,9 +11,6 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import select
 
-# Load environment variables from .env file
-load_dotenv()
-
 from app.elasticsearch.index import reindex_items
 from app.services.download_service import DownloadService
 from db.database import database
@@ -35,6 +32,9 @@ from ...tasks.summarization import generate_item_summary
 from .jsonp import JSONPResponse
 from .shared import SORT_MAPPINGS, SortOption
 
+# Load environment variables from .env file
+load_dotenv()
+
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,9 @@ async def api_root():
         content={
             "api": "BTAA Geodata API",
             "version": "0.1.0",
-            "description": "API for accessing geospatial data from the Big Ten Academic Alliance Geoportal",
+            "description": (
+                "API for accessing geospatial data from the Big Ten Academic Alliance Geoportal"
+            ),
             "endpoints": [
                 "/items",
                 "/search",
@@ -256,7 +258,7 @@ async def get_item(
         raise
     except Exception as e:
         logger.error(f"Item fetch failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/items/")
@@ -828,7 +830,8 @@ async def identify_geo_entities(
             # Trigger the geographic entity identification task
             geo_entities_task = generate_geo_entities.delay(item_id=id, metadata=item)
             logger.info(
-                f"Started geographic entity identification task {geo_entities_task.id} for item {id}"
+                f"Started geographic entity identification task {geo_entities_task.id} "
+                f"for item {id}"
             )
 
             # Invalidate the item cache since we'll be updating it

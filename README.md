@@ -289,6 +289,8 @@ Data from Who's On First. [License](https://whosonfirst.org/docs/licenses/)
 - [ ] Item View - metadata
 - [ ] Item View - related items (vector metadata search)
 - [ ] Item View - similar images (vector imagery search)
+- [ ] Collection View
+- [ ] Place View
 - [X] Gazetteer - BTAA Spatial
 - [X] Gazetteer - Geonames
 - [X] Gazetteer - OCLC Fast (Geographic)

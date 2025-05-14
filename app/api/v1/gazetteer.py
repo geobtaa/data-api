@@ -6,9 +6,6 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
 
-# Load environment variables from .env file
-load_dotenv()
-
 from app.services.cache_service import cached_endpoint
 from db.database import database
 from db.models import (
@@ -20,6 +17,9 @@ from db.models import (
     gazetteer_wof_names,
     gazetteer_wof_spr,
 )
+
+# Load environment variables from .env file
+load_dotenv()
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

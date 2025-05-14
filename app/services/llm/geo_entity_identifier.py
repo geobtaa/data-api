@@ -53,17 +53,16 @@ class GeoEntityIdentifier:
         try:
             logger.info("Making API request to OpenAI")
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with (
-                    session.post(
-                        self.api_url,
-                        headers=headers,
-                        json={
-                            "model": self.model,
-                            "messages": [{"role": "user", "content": prompt}],
-                            "temperature": 0.3,  # Lower temperature for more accurate entity identification
-                        },
-                    ) as response
-                ):
+                async with session.post(
+                    self.api_url,
+                    headers=headers,
+                    json={
+                        "model": self.model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        # Lower temperature for more accurate entity identification
+                        "temperature": 0.3,
+                    },
+                ) as response:
                     logger.debug(f"API Response status: {response.status}")
                     if response.status != 200:
                         error_text = await response.text()
@@ -122,7 +121,8 @@ For each geographic entity, provide:
 1. The entity name as it appears in the text
 2. The type of entity (e.g., city, country, river, mountain)
 3. Any additional contextual metadata about the entity that might help with disambiguation
-4. Using the entity name, entity type, and context, attempt to rewrite the entity name to match OCLC's Fast Gazetteer
+4. Using the entity name, entity type, and context, attempt to rewrite the entity name to match "
+    "OCLC's Fast Gazetteer"
 
 OCLC Fast Gazetteer Names follow these formats:
 State Name

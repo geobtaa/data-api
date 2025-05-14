@@ -8,13 +8,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-# Load environment variables from .env file
-load_dotenv()
-
 from app.api.v1.endpoints import router as api_router
 from app.api.v1.gazetteer import router as gazetteer_router
 from app.elasticsearch import close_elasticsearch, init_elasticsearch
 from db.database import database
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Create logs directory if it doesn't exist
 os.makedirs("logs", exist_ok=True)

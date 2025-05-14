@@ -117,7 +117,9 @@ class LLMService:
                         "content": [
                             {
                                 "type": "text",
-                                "text": "Extract all text from this image. Include any dates, numbers, and special characters. Preserve the original formatting and line breaks.",
+                                "text": "Extract all text from this image. "
+                                "Include any dates, numbers, and special characters. "
+                                "Preserve the original formatting and line breaks.",
                             },
                             {
                                 "type": "image_url",
