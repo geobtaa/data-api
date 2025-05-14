@@ -257,15 +257,32 @@ async def reindex_items():
 
         await init_elasticsearch()
 
-        # Fetch all documents from the database
-        items = await database.fetch_all(items.select())
+        # Process items in chunks
+        chunk_size = 1000  # Adjust this based on your needs
+        offset = 0
+        total_processed = 0
 
-        # Prepare bulk data for indexing
-        bulk_data = await prepare_bulk_data(items, index_name)
+        while True:
+            # Fetch a chunk of documents from the database
+            query = items.select().offset(offset).limit(chunk_size)
+            chunk = await database.fetch_all(query)
 
-        if bulk_data:
-            return await perform_bulk_indexing(bulk_data, index_name)
+            if not chunk:
+                break  # No more items to process
 
+            # Prepare bulk data for this chunk
+            bulk_data = await prepare_bulk_data(chunk, index_name)
+
+            if bulk_data:
+                # Index this chunk
+                await perform_bulk_indexing(bulk_data, index_name)
+                total_processed += len(chunk)
+                logger.info(f"Indexed {total_processed} items so far")
+
+            offset += chunk_size
+
+        if total_processed > 0:
+            return {"message": f"Successfully indexed {total_processed} items"}
         return {"message": "No items to index"}
 
     except Exception as e:

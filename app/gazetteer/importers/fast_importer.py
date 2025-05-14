@@ -11,6 +11,10 @@ from datetime import datetime
 from typing import Any, Dict, List
 from urllib.request import urlretrieve
 
+from db.models import gazetteer_fast
+
+from .base_importer import BaseImporter
+
 """
 FAST (Faceted Application of Subject Terminology) Importer
 
@@ -18,10 +22,6 @@ This module imports geographic entries from OCLC's FAST dataset.
 Data source: OCLC ResearchWorks (https://researchworks.oclc.org/researchdata/fast/)
 Attribution: OCLC FAST data is provided by OCLC under the OCLC ResearchWorks license.
 """
-
-from db.models import gazetteer_fast
-
-from .base_importer import BaseImporter
 
 logger = logging.getLogger(__name__)
 
@@ -386,7 +386,8 @@ class FastImporter(BaseImporter):
                 )
             else:
                 self.logger.debug(
-                    f"Skipping record due to missing required fields: fast_id={fast_id}, uri={uri}, label={label}"
+                    f"Skipping record due to missing required fields: "
+                    f"fast_id={fast_id}, uri={fast_uri}, label={label}"
                 )
 
         self.logger.info(f"Processed {len(processed_records)} records")

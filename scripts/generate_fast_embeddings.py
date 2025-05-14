@@ -104,9 +104,13 @@ async def process_batch(
 
         # Prepare SQL insert statement
         insert_stmt = text("""
-            INSERT INTO gazetteer_fast_embeddings 
-            (fast_id, label, geoname_id, viaf_id, wikipedia_id, embeddings, created_at, updated_at)
-            VALUES (:fast_id, :label, :geoname_id, :viaf_id, :wikipedia_id, :embeddings, :created_at, :updated_at)
+            INSERT INTO gazetteer_fast_embeddings (
+                fast_id, label, geoname_id, viaf_id, wikipedia_id, 
+                embeddings, created_at, updated_at
+            ) VALUES (
+                :fast_id, :label, :geoname_id, :viaf_id, :wikipedia_id, 
+                :embeddings, :created_at, :updated_at
+            )
         """)
 
         # Insert records with their embeddings

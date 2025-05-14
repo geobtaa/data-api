@@ -8,10 +8,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 from elasticsearch import AsyncElasticsearch
 
+from app.elasticsearch.mappings import INDEX_MAPPING
+
 # Load environment variables from .env file
 load_dotenv()
-
-from app.elasticsearch.mappings import INDEX_MAPPING
 
 # Get Elasticsearch URL from environment or use default
 ELASTICSEARCH_URL = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")

@@ -10,11 +10,12 @@ from celery import shared_task
 from dotenv import load_dotenv
 from sqlalchemy import insert
 
-# Load environment variables from .env file
-load_dotenv()
-
 from app.services.llm_service import LLMService
 from db.database import database
+from db.models import item_ai_enrichments
+
+# Load environment variables from .env file
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +156,7 @@ async def store_summary_in_db(
     output_parser: Dict[str, Any],
 ):
     """
-    Store the generated summary in the ai_enrichments table.
+    Store the generated summary in the itemai_enrichments table.
 
     Args:
         item_id: The ID of the item
@@ -195,7 +196,7 @@ async def store_summary_in_db(
 
         # Insert the record into the database
         async with database.transaction():
-            query = insert(ai_enrichments).values(**enrichment_data)
+            query = insert(item_ai_enrichments).values(**enrichment_data)
             await database.execute(query)
 
         logger.info(f"Stored summary for item {item_id} in the database")

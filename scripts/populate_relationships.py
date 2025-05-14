@@ -22,13 +22,13 @@ from pathlib import Path
 from databases import Database
 from dotenv import load_dotenv
 
+from db.config import ASYNC_DATABASE_URL
+
 # Load environment variables from .env file
 load_dotenv()
 
 # Add the project root directory to Python path to allow importing app modules
 sys.path.append(str(Path(__file__).parent.parent))
-
-from db.config import ASYNC_DATABASE_URL
 
 # Setup logging with both console and file output
 log_path = os.getenv("LOG_PATH", "logs")
