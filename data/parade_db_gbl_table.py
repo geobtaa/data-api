@@ -1,8 +1,14 @@
 import os
+import sys
+from pathlib import Path
 
+from dotenv import load_dotenv
 import pandas as pd
 import psycopg2
 from tqdm import tqdm
+
+# Load environment variables from .env file
+load_dotenv()
 
 # List available CSV files in the fixtures directory
 fixtures_dir = "fixtures"
@@ -31,7 +37,7 @@ data = pd.read_csv(csv_file_path, low_memory=False)
 
 # Connect to PostgreSQL using environment variables
 conn = psycopg2.connect(
-    dbname=os.getenv("POSTGRES_DB", "geoblacklight_development"),
+    dbname=os.getenv("POSTGRES_DB", "btaa_geometadata_api"),
     user=os.getenv("POSTGRES_USER", "postgres"),
     password=os.getenv("POSTGRES_PASSWORD", "postgres"),
     host=os.getenv("POSTGRES_HOST", "paradedb"),  # Use the Docker service name
@@ -50,7 +56,7 @@ conn.commit()
 
 # Create table without the generated column first
 create_table_query = """
-CREATE TABLE IF NOT EXISTS geoblacklight_development (
+CREATE TABLE IF NOT EXISTS items (
     id VARCHAR PRIMARY KEY,
     dct_title_s VARCHAR,
     dct_alternative_sm VARCHAR[],
@@ -134,7 +140,7 @@ def convert_to_boolean(value):
 
 # Define the insert query with ON CONFLICT to skip duplicates
 insert_query = """
-INSERT INTO geoblacklight_development (
+INSERT INTO items (
     id, dct_title_s, dct_alternative_sm, dct_description_sm, dct_language_sm,
     gbl_displayNote_sm, dct_creator_sm, dct_publisher_sm, schema_provider_s,
     gbl_resourceClass_sm, gbl_resourceType_sm, dct_subject_sm, dcat_theme_sm,
@@ -217,8 +223,8 @@ print("Data insertion complete.")
 
 # Recreate indexes after import
 create_indexes_query = """
-CREATE INDEX idx_dct_title_s ON geoblacklight_development (dct_title_s);
-CREATE INDEX idx_dct_alternative_sm ON geoblacklight_development USING gin (dct_alternative_sm);
+CREATE INDEX idx_dct_title_s ON items (dct_title_s);
+CREATE INDEX idx_dct_alternative_sm ON items USING gin (dct_alternative_sm);
 -- Add more CREATE INDEX statements for other indexes as needed
 """
 cursor.execute(create_indexes_query)

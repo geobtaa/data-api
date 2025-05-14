@@ -3,15 +3,20 @@ import logging
 import os
 import time
 from urllib.parse import urlencode
+from typing import Any, Dict, List, Optional
 
+from dotenv import load_dotenv
 from fastapi import HTTPException
 from sqlalchemy.sql import text
 
 from app.services.viewer_service import create_viewer_attributes  # Updated import
 from db.database import database
-from db.models import geoblacklight_development
+from db.models import items
 
 from .client import es
+
+# Load environment variables from .env file
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -26,16 +31,16 @@ def get_search_criteria(query: str, fq: dict, skip: int, limit: int, sort: list 
     }
 
 
-async def search_documents(
+async def search_items(
     query: str = None, fq: dict = None, skip: int = 0, limit: int = 20, sort: list = None
 ):
-    """Search documents in Elasticsearch with optional filters, sorting, and spelling
+    """Search items in Elasticsearch with optional filters, sorting, and spelling
     suggestions."""
     # Ensure limit is not zero to avoid division by zero errors
     if limit <= 0:
         limit = 20  # Default to 20 if limit is zero or negative
 
-    index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
+    index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_geometadata_api")
 
     try:
         # Get the current search criteria
@@ -304,25 +309,25 @@ async def process_search_response(response, limit, skip, search_criteria):
         )
 
         query = (
-            geoblacklight_development.select()
-            .where(geoblacklight_development.c.id.in_(document_ids))
+            items.select()
+            .where(items.c.id.in_(document_ids))
             .order_by(text(order_case))
         )
 
-        documents = await database.fetch_all(query)
-        processed_documents = []
+        item_rows = await database.fetch_all(query)
+        processed_items = []
 
-        for doc in documents:
-            processed_documents.append(
+        for item in item_rows:
+            processed_items.append(
                 {
                     "type": "document",
-                    "id": doc["id"],
+                    "id": item["id"],
                     "score": next(
                         hit["_score"]
                         for hit in response["hits"]["hits"]
-                        if hit["_source"]["id"] == doc["id"]
+                        if hit["_source"]["id"] == item["id"]
                     ),
-                    "attributes": {**doc, **create_viewer_attributes(doc)},
+                    "attributes": {**item, **create_viewer_attributes(item)},
                 }
             )
 
@@ -357,7 +362,7 @@ async def process_search_response(response, limit, skip, search_criteria):
                 },
                 "suggestions": suggestions,  # Add suggestions to meta
             },
-            "data": processed_documents,
+            "data": processed_items,
             "included": included,
         }
 

@@ -12,7 +12,7 @@ from PIL import Image
 from sqlalchemy import insert
 
 from db.database import database
-from db.models import ai_enrichments
+from db.models import item_ai_enrichments
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ async def _generate_ocr(
         # Store the OCR text in the database
         logger.info("Storing OCR text in database")
         await store_ocr_in_db(
-            document_id=item_id,
+            item_id=item_id,
             ocr_text=ocr_text,
         )
         logger.info("OCR text stored in database")
@@ -325,7 +325,7 @@ async def _process_download_ocr(download_url: str) -> Optional[str]:
 
 
 async def store_ocr_in_db(
-    document_id: str,
+    item_id: str,
     ocr_text: str,
 ):
     """
@@ -344,7 +344,7 @@ async def store_ocr_in_db(
 
         # Create the enrichment record
         enrichment_data = {
-            "document_id": document_id,
+            "item_id": item_id,
             "ai_provider": "Tesseract",
             "model": "tesseract-ocr",
             "enrichment_type": "ocr",
@@ -355,10 +355,10 @@ async def store_ocr_in_db(
 
         # Insert the record into the database
         async with database.transaction():
-            query = insert(ai_enrichments).values(**enrichment_data)
+            query = insert(item_ai_enrichments).values(**enrichment_data)
             await database.execute(query)
 
-        logger.info(f"Stored OCR text for document {document_id} in the database")
+        logger.info(f"Stored OCR text for item {item_id} in the database")
 
     except Exception as e:
         logger.error(f"Error storing OCR text in database: {str(e)}")

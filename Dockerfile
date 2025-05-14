@@ -14,17 +14,29 @@ RUN apt-get update && apt-get install -y \
     tesseract-ocr-eng \
     gdal-bin \
     libgdal-dev \
+    curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Set GDAL version
 ENV GDAL_VERSION=3.4.1
 
-# Copy requirements first to leverage Docker cache
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install UV
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    ls -l /root/.local/bin/uv && \
+    /root/.local/bin/uv --version
+
+# Add uv to PATH
+ENV PATH="/root/.local/bin:$PATH"
+
+# Copy pyproject.toml and uv.lock first to leverage Docker cache
+COPY pyproject.toml uv.lock ./
 
 # Copy the rest of the application
 COPY . .
+
+# Install Python dependencies
+RUN uv pip install -e . --system
 
 # Create logs directory
 RUN mkdir -p logs

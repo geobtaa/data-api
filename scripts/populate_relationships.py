@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """
-Script to populate document relationships in the database.
+Script to populate item relationships in the database.
 
-This script processes document relationships from the geoblacklight_development table
-and populates the document_relationships table with both primary and inverse relationships.
+This script processes item relationships from the items table
+and populates the item_relationships table with both primary and inverse relationships.
 It handles various types of relationships like isPartOf, hasMember, isVersionOf, etc.
 
 Environment Variables:
@@ -19,7 +19,13 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+import psycopg2
+
 from databases import Database
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Add the project root directory to Python path to allow importing app modules
 sys.path.append(str(Path(__file__).parent.parent))
@@ -57,13 +63,13 @@ RELATIONSHIP_MAPPINGS = {
 
 async def populate_relationships():
     """
-    Populate the document_relationships table with relationships from geoblacklight_development.
+    Populate the item_relationships table with relationships from items.
 
     This function:
     1. Connects to the database
     2. Clears existing relationships
-    3. Fetches all documents with relationship fields
-    4. Processes each document and creates both primary and inverse relationships
+    3. Fetches all items with relationship fields
+    4. Processes each item and creates both primary and inverse relationships
     5. Tracks and logs the total number of relationships created
 
     Raises:
@@ -76,24 +82,24 @@ async def populate_relationships():
 
         # Clear existing relationships to ensure clean state
         logger.info("Clearing existing relationships...")
-        await database.execute("TRUNCATE TABLE document_relationships")
+        await database.execute("TRUNCATE TABLE item_relationships")
 
-        # Fetch all documents with their relationship fields
-        logger.info("Fetching documents...")
+        # Fetch all items with their relationship fields
+        logger.info("Fetching items...")
         query = """
             SELECT id, dct_relation_sm, pcdm_memberof_sm, dct_ispartof_sm, 
                    dct_source_sm, dct_isversionof_sm, dct_replaces_sm, 
                    dct_isreplacedby_sm 
-            FROM geoblacklight_development
+            FROM items
         """
-        documents = await database.fetch_all(query)
-        logger.info(f"Processing {len(documents)} documents...")
+        items = await database.fetch_all(query)
+        logger.info(f"Processing {len(items)} items...")
 
         # Process each document and create relationships
         relationship_count = 0
-        for doc in documents:
+        for item in items:
             for field, (predicate, inverse_predicate) in RELATIONSHIP_MAPPINGS.items():
-                values = getattr(doc, field, None)
+                values = getattr(item, field, None)
 
                 if not values:
                     continue
@@ -107,19 +113,23 @@ async def populate_relationships():
                     # Insert the primary relationship
                     await database.execute(
                         """
-                        INSERT INTO document_relationships (subject_id, predicate, object_id) 
+                        INSERT INTO item_relationships (subject_id, predicate, object_id) 
                         VALUES (:subject, :predicate, :object)
                         """,
-                        {"subject": doc.id, "predicate": predicate, "object": target_id},
+                        {"subject": item.id, "predicate": predicate, "object": target_id},
                     )
 
                     # Insert the inverse relationship
                     await database.execute(
                         """
-                        INSERT INTO document_relationships (subject_id, predicate, object_id) 
+                        INSERT INTO item_relationships (subject_id, predicate, object_id) 
                         VALUES (:subject, :predicate, :object)
                         """,
-                        {"subject": target_id, "predicate": inverse_predicate, "object": doc.id},
+                        {
+                            "subject": target_id,
+                            "predicate": inverse_predicate,
+                            "object": item.id,
+                        },
                     )
                     relationship_count += 2
 

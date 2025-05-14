@@ -3,9 +3,13 @@ import os
 import sys
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
+# Load environment variables from .env file
+load_dotenv()
 
 from app.api.v1.endpoints import router as api_router
 from app.api.v1.gazetteer import router as gazetteer_router

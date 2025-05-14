@@ -16,8 +16,8 @@ from sqlalchemy import (
 
 metadata = MetaData()
 
-geoblacklight_development = Table(
-    "geoblacklight_development",
+items = Table(
+    "items",
     metadata,
     Column("id", String, primary_key=True),
     Column("dct_title_s", String),
@@ -63,8 +63,8 @@ geoblacklight_development = Table(
     Column("gbl_georeferenced_b", Boolean),
 )
 
-document_relationships = Table(
-    "document_relationships",
+item_relationships = Table(
+    "item_relationships",
     metadata,
     Column("id", Integer, primary_key=True),
     Column("subject_id", String, nullable=False),
@@ -242,11 +242,11 @@ gazetteer_fast_embeddings = Table(
 )
 
 # AI Enrichments table
-ai_enrichments = Table(
-    "ai_enrichments",
+item_ai_enrichments = Table(
+    "item_ai_enrichments",
     metadata,
     Column("enrichment_id", Integer, primary_key=True, autoincrement=True),
-    Column("document_id", String, nullable=False, index=True),
+    Column("item_id", String, nullable=False, index=True),
     Column("ai_provider", String, nullable=False),
     Column("model", String, nullable=False),
     Column("enrichment_type", String(50), nullable=False),

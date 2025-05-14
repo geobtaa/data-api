@@ -43,7 +43,7 @@ def add_fast_gazetteer():
             Column("uri", String, nullable=False),
             Column("type", String, nullable=False),
             Column("label", String, nullable=False),
-            Column("geonames", String),
+            Column("geoname_id", String),
             Column("created_at", TIMESTAMP),
             Column("updated_at", TIMESTAMP),
         )
@@ -63,7 +63,7 @@ def add_fast_gazetteer():
                     """
                 CREATE INDEX IF NOT EXISTS idx_fast_label ON gazetteer_fast(label);
                 CREATE INDEX IF NOT EXISTS idx_fast_type ON gazetteer_fast(type);
-                CREATE INDEX IF NOT EXISTS idx_fast_geonames ON gazetteer_fast(geonames);
+                CREATE INDEX IF NOT EXISTS idx_fast_geoname_id ON gazetteer_fast(geoname_id);
             """
                 )
             )

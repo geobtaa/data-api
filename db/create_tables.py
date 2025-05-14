@@ -10,7 +10,7 @@ load_dotenv()
 
 # Get the database URL
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://postgres:postgres@paradedb:5432/geoblacklight_development"
+    "DATABASE_URL", "postgresql://postgres:postgres@paradedb:5432/btaa_geometadata_api"
 )
 
 

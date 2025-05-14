@@ -1,9 +1,13 @@
 import logging
 import os
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
+from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
+
+# Load environment variables from .env file
+load_dotenv()
 
 from db.database import database
 from db.models import (
@@ -16,7 +20,7 @@ from db.models import (
     gazetteer_wof_spr,
 )
 
-from ...services.cache_service import cached_endpoint
+from app.services.cache_service import CacheService, cached_endpoint
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
