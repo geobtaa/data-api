@@ -1,10 +1,8 @@
-from fastapi.testclient import TestClient
-import json
-from jsonschema import validate
+import asyncio
+
 import pytest
 import pytest_asyncio
-import asyncio
-from contextlib import asynccontextmanager
+from fastapi.testclient import TestClient
 
 from app.main import app
 from db.database import database

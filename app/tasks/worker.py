@@ -2,10 +2,10 @@ import hashlib
 import logging
 import os
 
-from dotenv import load_dotenv
 import redis
 import requests
 from celery import Celery
+from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()

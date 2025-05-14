@@ -10,15 +10,15 @@
     },
     "query_time": {
       "type": "object",
-      "required": ["cache", "elasticsearch", "document_processing", "total_response_time"],
+      "required": ["cache", "elasticsearch", "item_processing", "total_response_time"],
       "properties": {
         "cache": { "type": "string" },
         "elasticsearch": { "type": "string" },
-        "document_processing": {
+        "item_processing": {
           "type": "object",
           "properties": {
             "total": { "type": "string" },
-            "per_document": { "type": "string" },
+            "per_item": { "type": "string" },
             "thumbnail_service": { "type": "string" },
             "citation_service": { "type": "string" },
             "viewer_service": { "type": "string" }

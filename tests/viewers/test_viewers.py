@@ -1,3 +1,4 @@
+
 from app.viewers import ItemViewer
 
 
@@ -53,6 +54,11 @@ def test_viewer_geometry_with_geojson():
     assert geometry["coordinates"] == [0, 0]
 
 
+# TODO: This test will fail due to event loop issues in test teardown.
+# The error occurs in the setup_test_database fixture cleanup phase.
+# Issue: RuntimeError: Event loop is closed
+# This needs investigation into how pytest-asyncio handles fixture cleanup
+# and event loop lifecycle management.
 def test_viewer_geometry_with_invalid():
     references = {"locn_geometry": "INVALID"}
     viewer = ItemViewer(references)

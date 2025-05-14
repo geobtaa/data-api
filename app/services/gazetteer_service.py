@@ -2,8 +2,8 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
-from dotenv import load_dotenv
 import asyncpg
+from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()

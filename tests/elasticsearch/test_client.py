@@ -51,7 +51,7 @@ async def es_client():
                 print(f"Cleaned up test index {TEST_INDEX_NAME}")
         except Exception as e:
             print(f"Error cleaning up test index: {e}")
-        
+
         # Always close the client
         await client.close()
 
@@ -76,6 +76,7 @@ async def test_init_elasticsearch_index_exists(es_client, monkeypatch):
     """Test initialization when index already exists."""
     # Monkeypatch the global ES client to use our test client
     import app.elasticsearch.client
+
     monkeypatch.setattr(app.elasticsearch.client, "es", es_client)
 
     # Delete the index if it exists

@@ -283,7 +283,7 @@ Data from Who's On First. [License](https://whosonfirst.org/docs/licenses/)
 - [ ] Item View - export conversions (Shapefile to: GeoJSON, CSV, TSV, etc)
 - [ ] Item View - code previews (Py, R, Leaflet)
 - [ ] Item View - embeds
-- [ ] Item View - allmaps integration
+- [ ] Item View - allmaps integration (via embeds)
 - [ ] Item View - data dictionaries
 - [ ] Item View - web services
 - [ ] Item View - metadata

@@ -10,12 +10,12 @@ client = TestClient(app)
 
 
 @pytest.fixture
-def mock_document():
-    """Return a mock document for testing."""
+def mock_item():
+    """Return a mock item for testing."""
     return {
-        "id": "test-document-id",
-        "dct_title_s": "Test Document Title",
-        "dct_description_sm": ["This is a test document description"],
+        "id": "test-item-id",
+        "dct_title_s": "Test Item Title",
+        "dct_description_sm": ["This is a test item description"],
         "dct_creator_sm": ["Test Creator"],
         "dct_publisher_sm": ["Test Publisher"],
         "dct_references_s": json.dumps(
@@ -39,16 +39,16 @@ def mock_relationships():
     return {
         "isPartOf": [
             {
-                "doc_id": "related-doc-1",
-                "doc_title": "Related Document 1",
-                "link": "http://localhost:8000/api/v1/documents/related-doc-1",
+                "item_id": "related-item-1",
+                "item_title": "Related Item 1",
+                "link": "http://localhost:8000/api/v1/items/related-item-1",
             }
         ],
         "hasPart": [
             {
-                "doc_id": "related-doc-2",
-                "doc_title": "Related Document 2",
-                "link": "http://localhost:8000/api/v1/documents/related-doc-2",
+                "item_id": "related-item-2",
+                "item_title": "Related Item 2",
+                "link": "http://localhost:8000/api/v1/items/related-item-2",
             }
         ],
     }
@@ -60,7 +60,7 @@ def mock_summaries():
     return [
         {
             "id": 1,
-            "document_id": "test-document-id",
+            "item_id": "test-item-id",
             "type": "summary",
             "content": "This is a test AI-generated summary.",
             "created_at": "2023-01-01T00:00:00",
@@ -71,30 +71,30 @@ def mock_summaries():
 
 @pytest.mark.asyncio
 @patch("app.api.v1.endpoints.database.fetch_one")
-@patch("app.api.v1.endpoints.get_document_relationships")
+@patch("app.api.v1.endpoints.get_item_relationships")
 @patch("app.api.v1.endpoints.database.fetch_all")
-async def test_get_document(
+async def test_get_item(
     mock_fetch_all,
     mock_get_relationships,
     mock_fetch_one,
-    mock_document,
+    mock_item,
     mock_relationships,
     mock_summaries,
 ):
-    """Test the get_document endpoint."""
+    """Test the get_item endpoint."""
     # Setup mocks
-    mock_fetch_one.return_value = mock_document
+    mock_fetch_one.return_value = mock_item
     mock_get_relationships.return_value = mock_relationships
     mock_fetch_all.return_value = mock_summaries
 
     # Call endpoint
-    response = client.get(f"/api/v1/documents/{mock_document['id']}")
+    response = client.get(f"/api/v1/items/{mock_item['id']}")
 
     # Verify response
     assert response.status_code == 200
     data = response.json()
-    assert data["data"]["id"] == mock_document["id"]
-    assert data["data"]["attributes"]["dct_title_s"] == mock_document["dct_title_s"]
+    assert data["data"]["id"] == mock_item["id"]
+    assert data["data"]["attributes"]["dct_title_s"] == mock_item["dct_title_s"]
     assert "ui_thumbnail_url" in data["data"]["attributes"]
     assert "ui_citation" in data["data"]["attributes"]
     assert "ui_downloads" in data["data"]["attributes"]
@@ -105,35 +105,35 @@ async def test_get_document(
 
 @pytest.mark.asyncio
 @patch("app.api.v1.endpoints.database.fetch_one")
-async def test_get_document_not_found(mock_fetch_one):
-    """Test the get_document endpoint with non-existent ID."""
-    # Setup mock to return None (document not found)
+async def test_get_item_not_found(mock_fetch_one):
+    """Test the get_item endpoint with non-existent ID."""
+    # Setup mock to return None (item not found)
     mock_fetch_one.return_value = None
 
     # Call endpoint
-    response = client.get("/api/v1/documents/non-existent-id")
+    response = client.get("/api/v1/items/non-existent-id")
 
     # Verify response
     assert response.status_code == 404
-    assert response.json()["detail"] == "Document not found"
+    assert response.json()["detail"] == "Item not found"
 
 
 @pytest.mark.asyncio
 @patch("app.api.v1.endpoints.database.fetch_all")
-async def test_list_documents(mock_fetch_all, mock_document):
-    """Test the list_documents endpoint."""
-    # Setup mock to return a list of documents
-    mock_fetch_all.return_value = [mock_document, mock_document]
+async def test_list_items(mock_fetch_all, mock_item):
+    """Test the list_items endpoint."""
+    # Setup mock to return a list of items
+    mock_fetch_all.return_value = [mock_item, mock_item]
 
     # Call endpoint
-    response = client.get("/api/v1/documents/")
+    response = client.get("/api/v1/items/")
 
     # Verify response
     assert response.status_code == 200
     data = response.json()
     assert len(data["data"]) == 2
-    assert data["data"][0]["id"] == mock_document["id"]
-    assert data["data"][0]["attributes"]["dct_title_s"] == mock_document["dct_title_s"]
+    assert data["data"][0]["id"] == mock_item["id"]
+    assert data["data"][0]["attributes"]["dct_title_s"] == mock_item["dct_title_s"]
     assert "ui_thumbnail_url" in data["data"][0]["attributes"]
     assert "ui_citation" in data["data"][0]["attributes"]
     assert "ui_downloads" in data["data"][0]["attributes"]
@@ -141,27 +141,27 @@ async def test_list_documents(mock_fetch_all, mock_document):
 
 @pytest.mark.asyncio
 @patch("app.api.v1.endpoints.database.fetch_all")
-async def test_get_document_relationships(mock_fetch_all):
-    """Test the get_document_relationships function."""
+async def test_get_item_relationships(mock_fetch_all):
+    """Test the get_item_relationships function."""
     # Setup mock to return relationship data
     mock_fetch_all.return_value = [
         {
             "predicate": "isPartOf",
-            "object_id": "related-doc-1",
-            "dct_title_s": "Related Document 1",
+            "object_id": "related-item-1",
+            "dct_title_s": "Related Item 1",
         },
-        {"predicate": "hasPart", "object_id": "related-doc-2", "dct_title_s": "Related Document 2"},
+        {"predicate": "hasPart", "object_id": "related-item-2", "dct_title_s": "Related Item 2"},
     ]
 
     # Call function directly
-    from app.api.v1.endpoints import get_document_relationships
+    from app.api.v1.endpoints import get_item_relationships
 
-    relationships = await get_document_relationships("test-document-id")
+    relationships = await get_item_relationships("test-item-id")
 
     # Verify result
     assert "isPartOf" in relationships
     assert "hasPart" in relationships
     assert len(relationships["isPartOf"]) == 1
     assert len(relationships["hasPart"]) == 1
-    assert relationships["isPartOf"][0]["doc_id"] == "related-doc-1"
-    assert relationships["hasPart"][0]["doc_id"] == "related-doc-2"
+    assert relationships["isPartOf"][0]["item_id"] == "related-item-1"
+    assert relationships["hasPart"][0]["item_id"] == "related-item-2"

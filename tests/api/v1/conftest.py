@@ -26,12 +26,12 @@ async def setup_database():
 
 
 @pytest.fixture
-def mock_document():
-    """Return a mock document for testing."""
+def mock_item():
+    """Return a mock item for testing."""
     return {
-        "id": "test-document-id",
-        "dct_title_s": "Test Document Title",
-        "dct_description_sm": ["This is a test document description"],
+        "id": "test-item-id",
+        "dct_title_s": "Test Item Title",
+        "dct_description_sm": ["This is a test item description"],
         "dct_creator_sm": ["Test Creator"],
         "dct_publisher_sm": ["Test Publisher"],
         "dct_references_s": json.dumps(

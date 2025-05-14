@@ -6,8 +6,8 @@ import time
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from dotenv import load_dotenv
 from celery import shared_task
+from dotenv import load_dotenv
 from sqlalchemy import insert
 
 # Load environment variables from .env file
@@ -15,7 +15,6 @@ load_dotenv()
 
 from app.services.llm_service import LLMService
 from db.database import database
-from db.models import item_ai_enrichments
 
 logger = logging.getLogger(__name__)
 

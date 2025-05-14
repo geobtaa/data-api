@@ -2,11 +2,8 @@ import json
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
-from elasticsearch import AsyncElasticsearch
-from fastapi import HTTPException
 
 from db.database import database
 from db.models import items
@@ -188,7 +185,7 @@ def process_geometry(geometry):
             envelope_match = re.match(
                 r"ENVELOPE\(([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\)",
                 geometry,
-                re.IGNORECASE
+                re.IGNORECASE,
             )
             if envelope_match:
                 # Extract coordinates from ENVELOPE(minx,maxx,maxy,miny)
@@ -206,7 +203,7 @@ def process_geometry(geometry):
                         ]
                     ],
                 }
-            
+
             # Try to parse as JSON
             try:
                 geometry = json.loads(geometry)

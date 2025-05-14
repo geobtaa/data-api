@@ -4,10 +4,10 @@ import os
 import re
 from typing import Any, Dict, Optional
 
-from dotenv import load_dotenv
 import aiohttp
 import redis
 import requests
+from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()

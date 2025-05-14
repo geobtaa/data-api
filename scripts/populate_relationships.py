@@ -19,10 +19,8 @@ import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
-import psycopg2
-
 from databases import Database
+from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()

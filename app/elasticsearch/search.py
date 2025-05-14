@@ -3,7 +3,6 @@ import logging
 import os
 import time
 from urllib.parse import urlencode
-from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from fastapi import HTTPException
@@ -308,11 +307,7 @@ async def process_search_response(response, limit, skip, search_criteria):
             + " END"
         )
 
-        query = (
-            items.select()
-            .where(items.c.id.in_(document_ids))
-            .order_by(text(order_case))
-        )
+        query = items.select().where(items.c.id.in_(document_ids)).order_by(text(order_case))
 
         item_rows = await database.fetch_all(query)
         processed_items = []

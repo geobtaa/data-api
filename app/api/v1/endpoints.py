@@ -844,9 +844,7 @@ async def identify_geo_entities(
             return create_response(response_data, callback)
 
     except Exception as e:
-        logger.error(
-            f"Error triggering geographic entity identification for item {id}: {str(e)}"
-        )
+        logger.error(f"Error triggering geographic entity identification for item {id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

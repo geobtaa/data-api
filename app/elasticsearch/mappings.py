@@ -28,18 +28,11 @@ INDEX_MAPPING = {
             "locn_geometry": {
                 "type": "geo_shape",
                 "orientation": "counterclockwise",
-                "coerce": True
+                "coerce": True,
             },
-            "dcat_bbox": {
-                "type": "geo_shape",
-                "orientation": "counterclockwise",
-                "coerce": True
-            },
+            "dcat_bbox": {"type": "geo_shape", "orientation": "counterclockwise", "coerce": True},
             "dcat_centroid": {"type": "geo_point"},
-            "dct_references_s": {
-                "type": "object",
-                "enabled": False
-            },
+            "dct_references_s": {"type": "object", "enabled": False},
             "gbl_mdmodified_dt": {"type": "date"},
             "summary": {"type": "text"},
             "suggest": {
