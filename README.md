@@ -82,16 +82,22 @@ Run the API server:
 uvicorn main:app --reload
 ```
 
-## Database migrations
+## Run the Database migrations
 
 ```bash
 .venv/bin/python run_migrations.py
 ```
 
-## Elasticsearch indices
+## Run the Elasticsearch index
 
 ```bash
 .venv/bin/python run_index.py
+```
+
+## Run the Gazetteers
+
+```bash
+.venv/bin/python run_gazetteers.py
 ```
 
 ## Docker Hub

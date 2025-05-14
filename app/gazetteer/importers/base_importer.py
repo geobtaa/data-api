@@ -51,6 +51,8 @@ class BaseImporter:
             self.async_database_url = self.database_url.replace(
                 "postgresql://", "postgresql+asyncpg://", 1
             )
+        elif self.database_url.startswith("postgresql+asyncpg://"):
+            self.async_database_url = self.database_url
 
         # Configure logging
         if logger_name:
