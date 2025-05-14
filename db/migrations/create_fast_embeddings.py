@@ -10,9 +10,9 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
+    create_engine,
     inspect,
 )
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.sql import text
 
 # Add the project root directory to Python path
@@ -25,31 +25,24 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def create_fast_embeddings_table():
+def create_fast_embeddings_table():
     """Create the gazetteer_fast_embeddings table with vector support."""
     try:
-        # Create async engine
-        engine = create_async_engine(DATABASE_URL)
+        # Create engine
+        engine = create_engine(DATABASE_URL)
         
         # Check if table exists
-        async with engine.connect() as conn:
-            result = await conn.execute(text("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_name = 'gazetteer_fast_embeddings'
-                );
-            """))
-            table_exists = result.scalar()
-            
-            if table_exists:
-                logger.info("Table gazetteer_fast_embeddings already exists")
-                return
+        inspector = inspect(engine)
+        if inspector.has_table("gazetteer_fast_embeddings"):
+            logger.info("Table gazetteer_fast_embeddings already exists")
+            return
 
+        with engine.connect() as conn:
             # First, ensure the vector extension is installed
-            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
             
             # Create the table with proper vector type
-            await conn.execute(text("""
+            conn.execute(text("""
                 CREATE TABLE gazetteer_fast_embeddings (
                     id SERIAL PRIMARY KEY,
                     fast_id VARCHAR NOT NULL UNIQUE,
@@ -64,22 +57,19 @@ async def create_fast_embeddings_table():
             """))
             
             # Create index on the embeddings column for vector similarity search
-            await conn.execute(text("""
+            conn.execute(text("""
                 CREATE INDEX ON gazetteer_fast_embeddings 
                 USING ivfflat (embeddings vector_cosine_ops)
                 WITH (lists = 100);
             """))
             
-            await conn.commit()
+            conn.commit()
             logger.info("Successfully created gazetteer_fast_embeddings table")
 
     except Exception as e:
         logger.error(f"Error creating gazetteer_fast_embeddings table: {e}")
         raise
-    finally:
-        await engine.dispose()
 
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(create_fast_embeddings_table()) 
+    create_fast_embeddings_table() 

@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from elasticsearch import AsyncElasticsearch
 
+# Load environment variables from .env file
 load_dotenv()
 
 # Use the ELASTICSEARCH_URL from .env file or default to localhost

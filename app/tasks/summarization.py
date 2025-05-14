@@ -7,11 +7,14 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from celery import shared_task
+from dotenv import load_dotenv
 from sqlalchemy import insert
+
+# Load environment variables from .env file
+load_dotenv()
 
 from app.services.llm_service import LLMService
 from db.database import database
-from db.models import ai_enrichments
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +41,7 @@ def generate_item_summary(
     asset_type: Optional[str] = None,
 ) -> str:
     """
-    Celery task to generate a summary for a historical map or geographic dataset.
+    Celery task to generate a summary for an item.
 
     Args:
         item_id: The ID of the item
@@ -124,7 +127,7 @@ async def _generate_summary(
         # Store the summary in the database
         logger.info("Storing summary in database")
         await store_summary_in_db(
-            document_id=item_id,
+            item_id=item_id,
             model=llm_service.model,
             summary=summary,
             prompt=prompt,
@@ -145,7 +148,7 @@ async def _generate_summary(
 
 
 async def store_summary_in_db(
-    document_id: str,
+    item_id: str,
     model: str,
     summary: str,
     prompt: Dict[str, Any],
@@ -155,7 +158,7 @@ async def store_summary_in_db(
     Store the generated summary in the ai_enrichments table.
 
     Args:
-        document_id: The ID of the document
+        item_id: The ID of the item
         model: The model used for generation
         summary: The generated summary
         prompt: The prompt used for generation
@@ -179,7 +182,7 @@ async def store_summary_in_db(
 
         # Create the enrichment record with ISO format timestamps
         enrichment_data = {
-            "document_id": document_id,
+            "item_id": item_id,
             "ai_provider": "OpenAI",
             "model": model,
             "enrichment_type": "summarization",
@@ -195,7 +198,7 @@ async def store_summary_in_db(
             query = insert(ai_enrichments).values(**enrichment_data)
             await database.execute(query)
 
-        logger.info(f"Stored summary for document {document_id} in the database")
+        logger.info(f"Stored summary for item {item_id} in the database")
 
     except Exception as e:
         logger.error(f"Error storing summary in database: {str(e)}")

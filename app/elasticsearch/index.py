@@ -3,17 +3,22 @@ import logging
 import os
 import re
 
+from dotenv import load_dotenv
+
 from db.database import database
-from db.models import geoblacklight_development
+from db.models import items
 
 from .client import es
+
+# Load environment variables from .env file
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 
-async def index_documents():
-    """Index all documents from PostgreSQL into Elasticsearch."""
-    index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
+async def index_items():
+    """Index all items from PostgreSQL into Elasticsearch."""
+    index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_geometadata_api")
 
     if await es.indices.exists(index=index_name):
         await es.indices.delete(index=index_name)
@@ -22,95 +27,95 @@ async def index_documents():
 
     await init_elasticsearch()
 
-    documents = await database.fetch_all(geoblacklight_development.select())
-    bulk_data = await prepare_bulk_data(documents, index_name)
+    item_rows = await database.fetch_all(items.select())
+    bulk_data = await prepare_bulk_data(item_rows, index_name)
 
     if bulk_data:
         return await perform_bulk_indexing(bulk_data, index_name)
 
-    return {"message": "No documents to index"}
+    return {"message": "No items to index"}
 
 
-async def prepare_bulk_data(documents, index_name):
-    """Prepare documents for bulk indexing."""
+async def prepare_bulk_data(items, index_name):
+    """Prepare items for bulk indexing."""
     bulk_data = []
-    for doc in documents:
-        doc_dict = await process_document(dict(doc))
-        bulk_data.append({"index": {"_index": index_name, "_id": doc_dict["id"]}})
-        bulk_data.append(doc_dict)
+    for item in items:
+        item_dict = await process_item(dict(item))
+        bulk_data.append({"index": {"_index": index_name, "_id": item_dict["id"]}})
+        bulk_data.append(item_dict)
     return bulk_data
 
 
-async def process_document(doc_dict):
-    """Process a single document for indexing."""
-    for key, value in doc_dict.items():
+async def process_item(item_dict):
+    """Process a single item for indexing."""
+    for key, value in item_dict.items():
         if isinstance(value, (list, tuple)):
-            doc_dict[key] = list(value)
+            item_dict[key] = list(value)
         elif key == "dct_references_s" and value:
             try:
-                doc_dict[key] = json.loads(value)
+                item_dict[key] = json.loads(value)
             except json.JSONDecodeError:
-                doc_dict[key] = value
+                item_dict[key] = value
         elif key == "locn_geometry":
             try:
-                doc_dict[key] = process_geometry(value)
+                item_dict[key] = process_geometry(value)
             except Exception:
-                doc_dict[key] = None
+                item_dict[key] = None
         elif key == "dcat_bbox":
             try:
-                doc_dict[key] = process_geometry(value)
+                item_dict[key] = process_geometry(value)
             except Exception:
-                doc_dict[key] = None
+                item_dict[key] = None
         elif key == "dcat_centroid":
             try:
-                doc_dict[key] = process_geometry(value)
+                item_dict[key] = process_geometry(value)
             except Exception:
-                doc_dict[key] = None
+                item_dict[key] = None
 
     # Add summaries to the document
-    doc_dict["ai_summaries"] = await get_document_summaries(doc_dict["id"])
+    item_dict["ai_summaries"] = await get_item_summaries(item_dict["id"])
 
     # Clean and prepare suggestion inputs
     suggestion_inputs = []
 
     # Add title if it exists
-    if title := doc_dict.get("dct_title_s"):
+    if title := item_dict.get("dct_title_s"):
         suggestion_inputs.append(title)
 
     # Add creators
-    if creators := doc_dict.get("dct_creator_sm"):
+    if creators := item_dict.get("dct_creator_sm"):
         if isinstance(creators, list):
             suggestion_inputs.extend(creators)
         else:
             suggestion_inputs.append(creators)
 
     # Add publishers
-    if publishers := doc_dict.get("dct_publisher_sm"):
+    if publishers := item_dict.get("dct_publisher_sm"):
         if isinstance(publishers, list):
             suggestion_inputs.extend(publishers)
         else:
             suggestion_inputs.append(publishers)
 
     # Add provider
-    if provider := doc_dict.get("schema_provider_s"):
+    if provider := item_dict.get("schema_provider_s"):
         suggestion_inputs.append(provider)
 
     # Add subjects
-    if subjects := doc_dict.get("dct_subject_sm"):
+    if subjects := item_dict.get("dct_subject_sm"):
         if isinstance(subjects, list):
             suggestion_inputs.extend(subjects)
         else:
             suggestion_inputs.append(subjects)
 
     # Add spatial
-    if spatial := doc_dict.get("dct_spatial_sm"):
+    if spatial := item_dict.get("dct_spatial_sm"):
         if isinstance(spatial, list):
             suggestion_inputs.extend(spatial)
         else:
             suggestion_inputs.append(spatial)
 
     # Add keywords
-    if keywords := doc_dict.get("dcat_keyword_sm"):
+    if keywords := item_dict.get("dcat_keyword_sm"):
         if isinstance(keywords, list):
             suggestion_inputs.extend(keywords)
         else:
@@ -120,28 +125,28 @@ async def process_document(doc_dict):
     suggestion_inputs = [s for s in suggestion_inputs if s and str(s).strip()]
 
     # Get resource classes, ensuring it's a list and has at least one value
-    resource_classes = doc_dict.get("gbl_resourceclass_sm", [])
+    resource_classes = item_dict.get("gbl_resourceclass_sm", [])
     if isinstance(resource_classes, str):
         resource_classes = [resource_classes]
     if not resource_classes:
         resource_classes = ["none"]
 
     # Add suggestion field with cleaned data - removed contexts
-    doc_dict["suggest"] = {"input": suggestion_inputs}
+    item_dict["suggest"] = {"input": suggestion_inputs}
 
-    return doc_dict
+    return item_dict
 
 
-async def get_document_summaries(document_id):
-    """Get summaries for a document."""
+async def get_item_summaries(item_id):
+    """Get summaries for an item."""
     try:
         query = """
             SELECT enrichment_id, ai_provider, model, response, created_at
-            FROM ai_enrichments
-            WHERE document_id = :document_id
+            FROM item_ai_enrichments
+            WHERE item_id = :item_id
             ORDER BY created_at DESC
         """
-        summaries = await database.fetch_all(query, {"document_id": document_id})
+        summaries = await database.fetch_all(query, {"item_id": item_id})
 
         # Process summaries
         processed_summaries = []
@@ -164,7 +169,7 @@ async def get_document_summaries(document_id):
 
         return processed_summaries
     except Exception as e:
-        print(f"Error getting summaries for document {document_id}: {str(e)}")
+        print(f"Error getting summaries for item {item_id}: {str(e)}")
         return []
 
 
@@ -180,7 +185,7 @@ def process_geometry(geometry):
             envelope_match = re.match(
                 r"ENVELOPE\(([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\)",
                 geometry,
-                re.IGNORECASE
+                re.IGNORECASE,
             )
             if envelope_match:
                 # Extract coordinates from ENVELOPE(minx,maxx,maxy,miny)
@@ -198,7 +203,7 @@ def process_geometry(geometry):
                         ]
                     ],
                 }
-            
+
             # Try to parse as JSON
             try:
                 geometry = json.loads(geometry)
@@ -237,9 +242,9 @@ async def perform_bulk_indexing(bulk_data, index_name, bulk_size=100):
             # Optionally, implement retry logic here
 
 
-async def reindex_documents():
-    """Reindex all documents from PostgreSQL into Elasticsearch with the new mapping."""
-    index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
+async def reindex_items():
+    """Reindex all items from PostgreSQL into Elasticsearch with the new mapping."""
+    index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_geometadata_api")
 
     try:
         # Delete the existing index if it exists
@@ -253,15 +258,15 @@ async def reindex_documents():
         await init_elasticsearch()
 
         # Fetch all documents from the database
-        documents = await database.fetch_all(geoblacklight_development.select())
+        items = await database.fetch_all(items.select())
 
         # Prepare bulk data for indexing
-        bulk_data = await prepare_bulk_data(documents, index_name)
+        bulk_data = await prepare_bulk_data(items, index_name)
 
         if bulk_data:
             return await perform_bulk_indexing(bulk_data, index_name)
 
-        return {"message": "No documents to index"}
+        return {"message": "No items to index"}
 
     except Exception as e:
         logger.error(f"Error during reindexing: {str(e)}", exc_info=True)

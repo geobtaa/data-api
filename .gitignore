@@ -170,6 +170,7 @@ data/gazetteers/**/*.txt
 data/gazetteers/**/*.db
 data/gazetteers/**/*.bz2
 data/gazetteers/**/*.marcxml
+data/gazetteers/**/*.zip
 
 # Elasticsearch data
 data/elasticsearch/*

@@ -7,6 +7,10 @@ from functools import wraps
 from typing import Any, Optional
 
 import redis.asyncio as redis
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 

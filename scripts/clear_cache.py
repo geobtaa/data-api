@@ -21,15 +21,15 @@ from pathlib import Path
 import redis
 from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()
+
 # Add the project root directory to Python path to allow importing app modules
 sys.path.append(str(Path(__file__).parent.parent))
 
 # Setup logging with basic configuration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Load environment variables from .env file
-load_dotenv()
 
 
 def clear_redis_cache():

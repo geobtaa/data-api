@@ -7,6 +7,8 @@ from sqlalchemy.exc import ProgrammingError, OperationalError
 import psycopg2
 from dotenv import load_dotenv
 from urllib.parse import urlparse
+import asyncio
+import atexit
 
 # Load test environment variables
 load_dotenv(".env.test", override=True)
@@ -14,7 +16,7 @@ load_dotenv(".env.test", override=True)
 # Get test database URL from environment or use default
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:2345/data_api_test"
+    "postgresql://postgres:postgres@localhost:2345/btaa_geometadata_api_test"
 )
 
 # Parse database URL
@@ -34,7 +36,7 @@ def pytest_configure(config):
     
     # Set test environment variables
     os.environ["DATABASE_URL"] = DATABASE_URL
-    os.environ["ELASTICSEARCH_INDEX"] = "data_api_test"
+    os.environ["ELASTICSEARCH_INDEX"] = "btaa_geometadata_api_test"
     os.environ["LOG_PATH"] = "./test_logs"
     os.environ["ENDPOINT_CACHE"] = "true"
     
@@ -51,7 +53,7 @@ async def setup_test_database():
     """Set up test database tables before running tests."""
     from db.migrations.create_ai_enrichments import create_ai_enrichments_table
     from db.migrations.create_gazetteer_tables import create_gazetteer_tables
-    from db.migrations.create_document_relationships import create_relationships_table
+    from db.migrations.create_item_relationships import create_relationships_table
     from db.migrations.add_enrichment_type import add_enrichment_type_column
     
     # Connect to default database to create test database
@@ -93,7 +95,7 @@ async def setup_test_database():
 
     yield
 
-    # Clean up after all tests
+    # Cleanup after all tests are done
     try:
         conn = psycopg2.connect(
             dbname='postgres',

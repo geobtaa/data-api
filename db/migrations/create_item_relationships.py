@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_relationships_table():
-    """Create the document_relationships table."""
+    """Create the item_relationships table."""
     try:
         # Create engine and inspector
         engine = create_engine(DATABASE_URL)
@@ -26,8 +26,8 @@ def create_relationships_table():
         metadata = MetaData()
 
         # Define the relationships table
-        document_relationships = Table(
-            "document_relationships",
+        item_relationships = Table(
+            "item_relationships",
             metadata,
             Column("id", Integer, primary_key=True),
             Column("subject_id", String, nullable=False),
@@ -36,25 +36,25 @@ def create_relationships_table():
         )
 
         # Check if table exists using inspector
-        if not inspector.has_table("document_relationships"):
-            document_relationships.create(engine)
-            logger.info("Created document_relationships table")
+        if not inspector.has_table("item_relationships"):
+            item_relationships.create(engine)
+            logger.info("Created item_relationships table")
 
             # Create indexes
             with engine.connect() as conn:
                 conn.execute(
                     text(
                         """
-                    CREATE INDEX IF NOT EXISTS idx_subject_id ON document_relationships(subject_id);
-                    CREATE INDEX IF NOT EXISTS idx_object_id ON document_relationships(object_id);
-                    CREATE INDEX IF NOT EXISTS idx_predicate ON document_relationships(predicate);
+                    CREATE INDEX IF NOT EXISTS idx_subject_id ON item_relationships(subject_id);
+                    CREATE INDEX IF NOT EXISTS idx_object_id ON item_relationships(object_id);
+                    CREATE INDEX IF NOT EXISTS idx_predicate ON item_relationships(predicate);
                 """
                     )
                 )
                 conn.commit()
-                logger.info("Created indexes on document_relationships table")
+                logger.info("Created indexes on item_relationships table")
         else:
-            logger.info("document_relationships table already exists")
+            logger.info("item_relationships table already exists")
 
     except Exception as e:
         logger.error(f"Error creating relationships table: {e}")

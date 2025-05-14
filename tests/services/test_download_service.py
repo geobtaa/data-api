@@ -6,11 +6,11 @@ from app.services.download_service import DownloadOption, DownloadService, IIIFD
 
 
 @pytest.fixture
-def mock_document_with_iiif():
-    """Return a mock document with IIIF references."""
+def mock_item_with_iiif():
+    """Return a mock item with IIIF references."""
     return {
-        "id": "test-doc-iiif",
-        "dct_title_s": "Test IIIF Document",
+        "id": "test-item-iiif",
+        "dct_title_s": "Test IIIF Item",
         "dct_format_s": "JPEG",
         "dct_references_s": json.dumps(
             {
@@ -22,11 +22,11 @@ def mock_document_with_iiif():
 
 
 @pytest.fixture
-def mock_document_with_direct_download():
-    """Return a mock document with direct download URL."""
+def mock_item_with_direct_download():
+    """Return a mock item with direct download URL."""
     return {
-        "id": "test-doc-download",
-        "dct_title_s": "Test Download Document",
+        "id": "test-item-download",
+        "dct_title_s": "Test Download Item",
         "dct_format_s": "PDF",
         "dct_references_s": json.dumps(
             {
@@ -37,11 +37,11 @@ def mock_document_with_direct_download():
 
 
 @pytest.fixture
-def mock_document_with_download_info_list():
-    """Return a mock document with list of download info objects."""
+def mock_item_with_download_info_list():
+    """Return a mock item with list of download info objects."""
     return {
-        "id": "test-doc-download-list",
-        "dct_title_s": "Test Multiple Downloads Document",
+        "id": "test-item-download-list",
+        "dct_title_s": "Test Multiple Downloads Item",
         "dct_format_s": "Mixed",
         "dct_references_s": json.dumps(
             {
@@ -55,11 +55,11 @@ def mock_document_with_download_info_list():
 
 
 @pytest.fixture
-def mock_document_with_download_info_dict():
-    """Return a mock document with download info as dictionary."""
+def mock_item_with_download_info_dict():
+    """Return a mock item with download info as dictionary."""
     return {
-        "id": "test-doc-download-dict",
-        "dct_title_s": "Test Single Download Info Document",
+        "id": "test-item-download-dict",
+        "dct_title_s": "Test Single Download Info Item",
         "dct_format_s": "TIFF",
         "dct_references_s": json.dumps(
             {
@@ -73,11 +73,11 @@ def mock_document_with_download_info_dict():
 
 
 @pytest.fixture
-def mock_document_with_service():
-    """Return a mock document with WMS/WFS services."""
+def mock_item_with_service():
+    """Return a mock item with WMS/WFS services."""
     return {
-        "id": "test-doc-service",
-        "dct_title_s": "Test Service Document",
+        "id": "test-item-service",
+        "dct_title_s": "Test Service Item",
         "gbl_wxsidentifier_s": "test_layer",
         "dct_references_s": json.dumps(
             {
@@ -131,9 +131,9 @@ class TestIIIFDownloadService:
 class TestDownloadService:
     """Test cases for DownloadService."""
 
-    def test_parse_references(self, mock_document_with_iiif):
-        """Test parsing references from document."""
-        service = DownloadService(mock_document_with_iiif)
+    def test_parse_references(self, mock_item_with_iiif):
+        """Test parsing references from item."""
+        service = DownloadService(mock_item_with_iiif)
         refs = service._parse_references()
 
         assert "http://iiif.io/api/image" in refs
@@ -147,9 +147,9 @@ class TestDownloadService:
 
         assert refs == {}
 
-    def test_get_direct_downloads_url_string(self, mock_document_with_direct_download):
+    def test_get_direct_downloads_url_string(self, mock_item_with_direct_download):
         """Test getting direct download URL as string."""
-        service = DownloadService(mock_document_with_direct_download)
+        service = DownloadService(mock_item_with_direct_download)
         downloads = service._get_direct_downloads()
 
         assert len(downloads) == 1
@@ -157,9 +157,9 @@ class TestDownloadService:
         assert downloads[0]["url"] == "https://example.com/download/document.pdf"
         assert downloads[0]["format"] == "pdf"
 
-    def test_get_direct_downloads_list(self, mock_document_with_download_info_list):
+    def test_get_direct_downloads_list(self, mock_item_with_download_info_list):
         """Test getting direct downloads as list."""
-        service = DownloadService(mock_document_with_download_info_list)
+        service = DownloadService(mock_item_with_download_info_list)
         downloads = service._get_direct_downloads()
 
         assert len(downloads) == 2
@@ -168,9 +168,9 @@ class TestDownloadService:
         assert downloads[1]["label"] == "ZIP Archive"
         assert downloads[1]["format"] == "zip"
 
-    def test_get_direct_downloads_dict(self, mock_document_with_download_info_dict):
+    def test_get_direct_downloads_dict(self, mock_item_with_download_info_dict):
         """Test getting direct downloads as dict."""
-        service = DownloadService(mock_document_with_download_info_dict)
+        service = DownloadService(mock_item_with_download_info_dict)
         downloads = service._get_direct_downloads()
 
         assert len(downloads) == 1
@@ -187,9 +187,9 @@ class TestDownloadService:
         assert service._guess_format("data.json") == "json"
         assert service._guess_format("unknown.xyz") == "unknown"
 
-    def test_get_service_url(self, mock_document_with_service):
+    def test_get_service_url(self, mock_item_with_service):
         """Test getting service URL by type."""
-        service = DownloadService(mock_document_with_service)
+        service = DownloadService(mock_item_with_service)
 
         wms_url = service._get_service_url("wms")
         assert wms_url == "https://example.com/geoserver/wms"
@@ -201,9 +201,9 @@ class TestDownloadService:
         unknown_url = service._get_service_url("unknown")
         assert unknown_url is None
 
-    def test_build_download_url(self, mock_document_with_service):
+    def test_build_download_url(self, mock_item_with_service):
         """Test building download URL with parameters."""
-        service = DownloadService(mock_document_with_service)
+        service = DownloadService(mock_item_with_service)
 
         # Test WMS GetMap option
         wms_option = DownloadOption(
@@ -254,9 +254,9 @@ class TestDownloadService:
         assert "SERVICE=WFS" in url
         assert "REQUEST=GetFeature" in url
 
-    def test_get_download_options_iiif(self, mock_document_with_iiif):
-        """Test getting download options for IIIF document."""
-        service = DownloadService(mock_document_with_iiif)
+    def test_get_download_options_iiif(self, mock_item_with_iiif):
+        """Test getting download options for IIIF item."""
+        service = DownloadService(mock_item_with_iiif)
         options = service.get_download_options()
 
         # Should have options from IIIF service
@@ -267,9 +267,9 @@ class TestDownloadService:
         assert "Thumb Image" in labels
         assert "Full Resolution Image" in labels
 
-    def test_get_download_options_direct(self, mock_document_with_direct_download):
-        """Test getting download options for direct download document."""
-        service = DownloadService(mock_document_with_direct_download)
+    def test_get_download_options_direct(self, mock_item_with_direct_download):
+        """Test getting download options for direct download item."""
+        service = DownloadService(mock_item_with_direct_download)
         options = service.get_download_options()
 
         assert len(options) == 1

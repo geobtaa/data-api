@@ -6,16 +6,20 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qs
 
+from dotenv import load_dotenv
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import select
 
-from app.elasticsearch.index import reindex_documents
+# Load environment variables from .env file
+load_dotenv()
+
+from app.elasticsearch.index import reindex_items
 from app.services.download_service import DownloadService
 from db.database import database
-from db.models import geoblacklight_development
+from db.models import items
 
-from ...elasticsearch import search_documents
+from ...elasticsearch import search_items
 from ...elasticsearch.client import es
 from ...services.cache_service import (
     ENDPOINT_CACHE,
@@ -38,7 +42,7 @@ logger = logging.getLogger(__name__)
 base_url = os.getenv("APPLICATION_URL", "http://localhost:8000/api/v1/")
 
 # Cache TTL configuration in seconds
-DOCUMENT_CACHE_TTL = int(os.getenv("DOCUMENT_CACHE_TTL", 86400))  # 24 hours
+ITEM_CACHE_TTL = int(os.getenv("ITEM_CACHE_TTL", 86400))  # 24 hours
 SEARCH_CACHE_TTL = int(os.getenv("SEARCH_CACHE_TTL", 3600))  # 1 hour
 SUGGEST_CACHE_TTL = int(os.getenv("SUGGEST_CACHE_TTL", 7200))  # 2 hours
 LIST_CACHE_TTL = int(os.getenv("LIST_CACHE_TTL", 43200))  # 12 hours
@@ -53,7 +57,7 @@ async def api_root():
             "version": "0.1.0",
             "description": "API for accessing geospatial data from the Big Ten Academic Alliance Geoportal",
             "endpoints": [
-                "/documents",
+                "/items",
                 "/search",
                 "/suggest",
                 "/thumbnails",
@@ -64,31 +68,31 @@ async def api_root():
     )
 
 
-def add_thumbnail_url(document: Dict) -> Dict:
-    """Add the ui_thumbnail_url to the document attributes."""
+def add_thumbnail_url(item: Dict) -> Dict:
+    """Add the ui_thumbnail_url to the item attributes."""
     # Ensure 'attributes' key exists
-    if "attributes" not in document:
-        document["attributes"] = {}
+    if "attributes" not in item:
+        item["attributes"] = {}
 
-    image_service = ImageService(document)
+    image_service = ImageService(item)
     thumbnail_url = image_service.get_thumbnail_url()
-    document["attributes"]["ui_thumbnail_url"] = thumbnail_url
-    return document
+    item["attributes"]["ui_thumbnail_url"] = thumbnail_url
+    return item
 
 
-def add_citations(document: Dict) -> Dict:
-    """Add citations to a document."""
+def add_citations(item: Dict) -> Dict:
+    """Add citations to an item."""
     # Ensure 'attributes' key exists
-    if "attributes" not in document:
-        document["attributes"] = {}
+    if "attributes" not in item:
+        item["attributes"] = {}
 
     try:
-        citation_service = CitationService(document)
-        document["attributes"]["ui_citation"] = citation_service.get_citation()
+        citation_service = CitationService(item)
+        item["attributes"]["ui_citation"] = citation_service.get_citation()
     except Exception as e:
         logger.error(f"Failed to generate citation: {str(e)}")
-        document["attributes"]["ui_citation"] = "Citation unavailable"
-    return document
+        item["attributes"]["ui_citation"] = "Citation unavailable"
+    return item
 
 
 def sanitize_for_json(obj: Any) -> Any:
@@ -118,51 +122,51 @@ def create_response(
     return JSONResponse(content=sanitized_content, status_code=status_code)
 
 
-def add_ui_attributes(doc: Dict) -> Dict:
-    """Add UI attributes to a document."""
+def add_ui_attributes(item: Dict) -> Dict:
+    """Add UI attributes to an item."""
     # Parse references if needed
-    if isinstance(doc.get("dct_references_s"), str):
+    if isinstance(item.get("dct_references_s"), str):
         try:
-            doc["dct_references_s"] = json.loads(doc["dct_references_s"])
+            item["dct_references_s"] = json.loads(item["dct_references_s"])
         except json.JSONDecodeError:
-            doc["dct_references_s"] = {}
+            item["dct_references_s"] = {}
 
     # Create services
-    image_service = ImageService(doc)
-    citation_service = CitationService(doc)
-    download_service = DownloadService(doc)
+    image_service = ImageService(item)
+    citation_service = CitationService(item)
+    download_service = DownloadService(item)
 
     # Add viewer attributes
-    doc.update(create_viewer_attributes(doc))
+    item.update(create_viewer_attributes(item))
 
     # Add thumbnail URL if available
     if thumbnail_url := image_service.get_thumbnail_url():
-        doc["ui_thumbnail_url"] = thumbnail_url
+        item["ui_thumbnail_url"] = thumbnail_url
 
     # Add citation
-    doc["ui_citation"] = citation_service.get_citation()
+    item["ui_citation"] = citation_service.get_citation()
 
     # Add download options
-    doc["ui_downloads"] = download_service.get_download_options()
+    item["ui_downloads"] = download_service.get_download_options()
 
-    return doc
+    return item
 
 
-async def get_document_relationships(doc_id: str) -> Dict:
-    """Get all relationships for a document."""
+async def get_item_relationships(item_id: str) -> Dict:
+    """Get all relationships for an item."""
     try:
-        logger.info(f"Fetching relationships for document: {doc_id}")
+        logger.info(f"Fetching relationships for item: {item_id}")
 
-        # Get outgoing relationships (where doc is subject)
+        # Get outgoing relationships (where item is subject)
         relationships_query = """
             SELECT predicate, object_id, dct_title_s
-            FROM document_relationships
-            JOIN geoblacklight_development 
-            ON geoblacklight_development.id = document_relationships.object_id
-            WHERE subject_id = :doc_id
+            FROM item_relationships
+            JOIN items 
+            ON items.id = item_relationships.object_id
+            WHERE subject_id = :item_id
             ORDER BY dct_title_s ASC
         """
-        db_relationships = await database.fetch_all(relationships_query, {"doc_id": doc_id})
+        db_relationships = await database.fetch_all(relationships_query, {"item_id": item_id})
         logger.info(f"Found {len(db_relationships)} relationships")
         logger.info(f"Relationships: {db_relationships}")
 
@@ -174,9 +178,9 @@ async def get_document_relationships(doc_id: str) -> Dict:
                 relationships[rel["predicate"]] = []
             relationships[rel["predicate"]].append(
                 {
-                    "doc_id": rel["object_id"],
-                    "doc_title": rel["dct_title_s"],
-                    "link": f"{base_url}/documents/{rel['object_id']}",
+                    "item_id": rel["object_id"],
+                    "item_title": rel["dct_title_s"],
+                    "link": f"{base_url}/items/{rel['object_id']}",
                 }
             )
             logger.debug(f"Added relationship: {rel['predicate']} -> {rel['object_id']}")
@@ -189,49 +193,49 @@ async def get_document_relationships(doc_id: str) -> Dict:
         return {}
 
 
-@router.get("/documents/{id}")
-@cached_endpoint(ttl=DOCUMENT_CACHE_TTL)
-async def get_document(
+@router.get("/items/{id}")
+@cached_endpoint(ttl=ITEM_CACHE_TTL)
+async def get_item(
     id: str,
     callback: Optional[str] = None,
     include_relationships: bool = True,
     include_summaries: bool = True,
 ):
-    """Get a single document by ID."""
+    """Get a single item by ID."""
     try:
-        # Get document
-        query = geoblacklight_development.select().where(geoblacklight_development.c.id == id)
+        # Get item
+        query = items.select().where(items.c.id == id)
         result = await database.fetch_one(query)
 
         if not result:
-            raise HTTPException(status_code=404, detail="Document not found")
+            raise HTTPException(status_code=404, detail="Item not found")
 
         # Convert to dict and process
-        doc = dict(result)
+        item = dict(result)
 
         # Add UI attributes
-        processed_doc = add_ui_attributes(doc)
+        processed_item = add_ui_attributes(item)
 
         # Get relationships
         if include_relationships:
-            relationships = await get_document_relationships(id)
+            relationships = await get_item_relationships(id)
             logger.info(f"Got relationships for {id}: {relationships}")  # Debug line
         else:
             relationships = {}
 
         # Add relationships to UI attributes
-        processed_doc["ui_relationships"] = relationships
+        processed_item["ui_relationships"] = relationships
 
         # Get summaries if requested
         summaries = []
         if include_summaries:
             try:
                 summaries_query = """
-                    SELECT * FROM ai_enrichments 
-                    WHERE document_id = :document_id 
+                    SELECT * FROM item_ai_enrichments 
+                    WHERE item_id = :item_id 
                     ORDER BY created_at DESC
                 """
-                summaries_result = await database.fetch_all(summaries_query, {"document_id": id})
+                summaries_result = await database.fetch_all(summaries_query, {"item_id": id})
                 summaries = [dict(summary) for summary in summaries_result]
                 logger.info(f"Got {len(summaries)} summaries for {id}")
             except Exception as e:
@@ -239,10 +243,10 @@ async def get_document(
                 summaries = []
 
         # Add summaries to UI attributes
-        processed_doc["ui_summaries"] = summaries
+        processed_item["ui_summaries"] = summaries
 
         # Create response
-        response = {"data": {"type": "document", "id": id, "attributes": processed_doc}}
+        response = {"data": {"type": "item", "id": id, "attributes": processed_item}}
 
         logger.info(f"Final response structure: {response}")  # Debug line
         return create_response(response, callback)
@@ -251,40 +255,40 @@ async def get_document(
         # Re-raise HTTPException to be handled by FastAPI's exception handler
         raise
     except Exception as e:
-        logger.error(f"Document fetch failed: {e}", exc_info=True)
+        logger.error(f"Item fetch failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/documents/")
+@router.get("/items/")
 @cached_endpoint(ttl=LIST_CACHE_TTL)
-async def list_documents(
+async def list_items(
     skip: int = 0,
     limit: int = 10,
     callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
-    query = geoblacklight_development.select().offset(skip).limit(limit)
-    documents = await database.fetch_all(query)
+    query = items.select().offset(skip).limit(limit)
+    results = await database.fetch_all(query)
 
-    processed_documents = []
-    for document in documents:
-        doc_dict = dict(document)
-        doc_dict = add_thumbnail_url(doc_dict)
-        doc_dict = add_citations(doc_dict)
-        viewer_attributes = create_viewer_attributes(doc_dict)
+    processed_items = []
+    for item in results:
+        item_dict = dict(item)
+        item_dict = add_thumbnail_url(item_dict)
+        item_dict = add_citations(item_dict)
+        viewer_attributes = create_viewer_attributes(item_dict)
 
         # Use DownloadService to get download options
-        download_service = DownloadService(doc_dict)
+        download_service = DownloadService(item_dict)
         ui_downloads = download_service.get_download_options()
 
-        processed_documents.append(
+        processed_items.append(
             {
-                "type": "document",
-                "id": str(doc_dict["id"]),
+                "type": "item",
+                "id": str(item_dict["id"]),
                 "attributes": {
-                    **doc_dict,
+                    **item_dict,
                     **viewer_attributes,
-                    "ui_citation": doc_dict.get("ui_citation"),
-                    "ui_thumbnail_url": doc_dict.get("ui_thumbnail_url"),
+                    "ui_citation": item_dict.get("ui_citation"),
+                    "ui_thumbnail_url": item_dict.get("ui_thumbnail_url"),
                     "ui_viewer_endpoint": viewer_attributes.get("ui_viewer_endpoint"),
                     "ui_viewer_geometry": viewer_attributes.get("ui_viewer_geometry"),
                     "ui_viewer_protocol": viewer_attributes.get("ui_viewer_protocol"),
@@ -293,7 +297,7 @@ async def list_documents(
             }
         )
 
-    return create_response({"data": processed_documents}, callback)
+    return create_response({"data": processed_items}, callback)
 
 
 @router.get("/search")
@@ -334,7 +338,7 @@ async def search(
 
         # Elasticsearch query
         es_start = time.time()
-        results = await search_documents(
+        results = await search_items(
             query=q,
             fq=filter_query,
             skip=skip,
@@ -344,40 +348,40 @@ async def search(
         es_time = (time.time() - es_start) * 1000
         timings["elasticsearch"] = f"{es_time:.0f}ms"
 
-        # Process each document
+        # Process each item
         process_start = time.time()
         docs_processed = 0
         citation_time = 0
         thumbnail_time = 0
         viewer_time = 0
 
-        for document in results["data"]:
+        for item in results["data"]:
             doc_start = time.time()
 
             # Add thumbnail URL
             thumb_start = time.time()
-            image_service = ImageService(document["attributes"])
-            document["attributes"]["ui_thumbnail_url"] = image_service.get_thumbnail_url()
+            image_service = ImageService(item["attributes"])
+            item["attributes"]["ui_thumbnail_url"] = image_service.get_thumbnail_url()
             thumbnail_time += time.time() - thumb_start
 
             # Add citation
             cite_start = time.time()
-            citation_service = CitationService(document["attributes"])
-            document["attributes"]["ui_citation"] = citation_service.get_citation()
+            citation_service = CitationService(item["attributes"])
+            item["attributes"]["ui_citation"] = citation_service.get_citation()
             citation_time += time.time() - cite_start
 
             # Add viewer attributes
             viewer_start = time.time()
-            viewer_attrs = create_viewer_attributes(document["attributes"])
-            document["attributes"].update(viewer_attrs)
+            viewer_attrs = create_viewer_attributes(item["attributes"])
+            item["attributes"].update(viewer_attrs)
             viewer_time += time.time() - viewer_start
 
             docs_processed += 1
 
         process_time = time.time() - process_start
-        timings["document_processing"] = {
+        timings["item_processing"] = {
             "total": f"{(process_time * 1000):.0f}ms",
-            "per_document": (
+            "per_item": (
                 f"{((process_time / docs_processed) * 1000):.0f}ms" if docs_processed > 0 else "0ms"
             ),
             "thumbnail_service": f"{(thumbnail_time * 1000):.0f}ms",
@@ -474,7 +478,7 @@ async def suggest(
             },
         }
 
-        index_name = os.getenv("ELASTICSEARCH_INDEX", "geoblacklight")
+        index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_geometadata_api")
 
         # Print the query for debugging
         # print("Suggest Query:", json.dumps(suggest_query, indent=2))
@@ -530,7 +534,7 @@ async def suggest(
 @router.get("/cache/clear")
 async def clear_cache(
     cache_type: Optional[str] = Query(
-        None, description="Type of cache to clear (search, document, suggest, all)"
+        None, description="Type of cache to clear (search, item, suggest, all)"
     ),
 ):
     """Clear specified cache or all cache if not specified."""
@@ -545,8 +549,8 @@ async def clear_cache(
         if cache_type == "search" or cache_type is None:
             await invalidate_cache_with_prefix("app.api.v1.endpoints:search")
 
-        if cache_type == "document" or cache_type is None:
-            await invalidate_cache_with_prefix("app.api.v1.endpoints:get_document")
+        if cache_type == "item" or cache_type is None:
+            await invalidate_cache_with_prefix("app.api.v1.endpoints:get_item")
 
         if cache_type == "suggest" or cache_type is None:
             await invalidate_cache_with_prefix("app.api.v1.endpoints:suggest")
@@ -582,7 +586,7 @@ async def perform_bulk_indexing(bulk_data, index_name, bulk_size=100):
 async def get_thumbnail(image_hash: str):
     """Serve a cached thumbnail image."""
     try:
-        # Create service without document (we only need cache access)
+        # Create service without item (we only need cache access)
         image_service = ImageService({})
         image_data = await image_service.get_cached_image(image_hash)
     except Exception as e:
@@ -598,54 +602,54 @@ async def get_thumbnail(image_hash: str):
     )
 
 
-@router.post("/documents/{id}/summarize")
-async def summarize_document(
+@router.post("/items/{id}/summarize")
+async def summarize_item(
     id: str,
     background_tasks: BackgroundTasks,
     callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
     """
-    Trigger the generation of a summary and OCR text for a document.
+    Trigger the generation of a summary and OCR text for an item.
     This endpoint will:
-    1. Fetch the document metadata
+    1. Fetch the item metadata
     2. Get the asset path and type
     3. Trigger asynchronous tasks to generate the summary and OCR text
     4. Return immediately with task IDs
     """
     try:
-        # Fetch the document
+        # Fetch the item
         async with database.transaction():
-            query = select(geoblacklight_development).where(geoblacklight_development.c.id == id)
+            query = select(items).where(items.c.id == id)
             result = await database.fetch_one(query)
 
             if not result:
-                raise HTTPException(status_code=404, detail="Document not found")
+                raise HTTPException(status_code=404, detail="Item not found")
 
             # Convert to dict and handle datetime serialization
-            document = dict(result)
-            for key, value in document.items():
+            item = dict(result)
+            for key, value in item.items():
                 if isinstance(value, datetime):
-                    document[key] = value.isoformat()
+                    item[key] = value.isoformat()
 
-            logger.info(f"Processing document {id}")
-            logger.debug(f"Raw document data: {json.dumps(document, indent=2)}")
+            logger.info(f"Processing item {id}")
+            logger.debug(f"Raw item data: {json.dumps(item, indent=2)}")
 
             # Get asset information
             asset_path = None
             asset_type = None
 
             # Parse dct_references_s to identify candidate assets
-            references = document.get("dct_references_s", {})
-            logger.info(f"Raw references for document {id}: {references}")
+            references = item.get("dct_references_s", {})
+            logger.info(f"Raw references for item {id}: {references}")
 
             if isinstance(references, str):
                 try:
                     references = json.loads(references)
                     logger.info(
-                        f"Parsed references for document {id}: {json.dumps(references, indent=2)}"
+                        f"Parsed references for item {id}: {json.dumps(references, indent=2)}"
                     )
                 except json.JSONDecodeError:
-                    logger.error(f"Failed to parse references JSON for document {id}: {references}")
+                    logger.error(f"Failed to parse references JSON for item {id}: {references}")
                     references = {}
 
             # Define asset type mappings
@@ -662,7 +666,7 @@ async def summarize_document(
                 if ref_type in references:
                     ref_value = references[ref_type]
                     logger.info(
-                        f"Found reference type {ref_type} with value {ref_value} for document {id}"
+                        f"Found reference type {ref_type} with value {ref_value} for item {id}"
                     )
 
                     # Handle both string and array values
@@ -683,20 +687,20 @@ async def summarize_document(
                         )
                         break
 
-            # If no specific asset type was found, use the document format as fallback
+            # If no specific asset type was found, use the item format as fallback
             if not asset_type:
-                asset_type = document.get("dc_format_s")
+                asset_type = item.get("dc_format_s")
                 logger.info(f"No specific asset type found, using format fallback: {asset_type}")
 
             logger.info(
-                f"Final asset determination for document {id}: path={asset_path}, type={asset_type}"
+                f"Final asset determination for item {id}: path={asset_path}, type={asset_type}"
             )
 
             # Trigger the summarization task
             summary_task = generate_item_summary.delay(
-                item_id=id, metadata=document, asset_path=asset_path, asset_type=asset_type
+                item_id=id, metadata=item, asset_path=asset_path, asset_type=asset_type
             )
-            logger.info(f"Started summary task {summary_task.id} for document {id}")
+            logger.info(f"Started summary task {summary_task.id} for item {id}")
 
             # If we have an asset, also trigger OCR
             ocr_task = None
@@ -704,15 +708,15 @@ async def summarize_document(
                 from app.tasks.ocr import generate_item_ocr
 
                 ocr_task = generate_item_ocr.delay(
-                    item_id=id, metadata=document, asset_path=asset_path, asset_type=asset_type
+                    item_id=id, metadata=item, asset_path=asset_path, asset_type=asset_type
                 )
-                logger.info(f"Started OCR task {ocr_task.id} for document {id}")
+                logger.info(f"Started OCR task {ocr_task.id} for item {id}")
             else:
-                logger.warning(f"No asset found for OCR processing on document {id}")
+                logger.warning(f"No asset found for OCR processing on item {id}")
                 logger.debug(f"Missing: asset_path={asset_path}, asset_type={asset_type}")
 
-            # Invalidate the document cache since we'll be updating it
-            invalidate_cache_with_prefix(f"document:{id}")
+            # Invalidate the item cache since we'll be updating it
+            invalidate_cache_with_prefix(f"item:{id}")
 
             # Create response data and ensure all datetime objects are serialized
             response_data = {
@@ -726,19 +730,19 @@ async def summarize_document(
             return create_response(sanitized_response, callback)
 
     except Exception as e:
-        logger.error(f"Error triggering summary and OCR generation for document {id}: {str(e)}")
+        logger.error(f"Error triggering summary and OCR generation for item {id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/documents/{id}/summaries")
-async def get_document_summaries(
+@router.get("/items/{id}/summaries")
+async def get_item_summaries(
     id: str, callback: Optional[str] = Query(None, description="JSONP callback name")
 ):
     """
-    Get all summaries for a document.
+    Get all summaries for an item.
 
     Args:
-        id: The document ID
+        id: The item ID
         callback: Optional JSONP callback name
 
     Returns:
@@ -749,10 +753,10 @@ async def get_document_summaries(
         async with database.transaction():
             query = """
                 SELECT * FROM ai_enrichments 
-                WHERE document_id = :document_id 
+                WHERE item_id = :item_id 
                 ORDER BY created_at DESC
             """
-            summaries = await database.fetch_all(query, {"document_id": id})
+            summaries = await database.fetch_all(query, {"item_id": id})
 
             # Convert to list of dicts
             summaries_list = [dict(summary) for summary in summaries]
@@ -765,13 +769,13 @@ async def get_document_summaries(
             return create_response(response_data, callback)
 
     except Exception as e:
-        logger.error(f"Error retrieving summaries for document {id}: {str(e)}")
+        logger.error(f"Error retrieving summaries for item {id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/reindex", response_model=dict)
 async def reindex(callback: Optional[str] = Query(None, description="JSONP callback name")):
-    """Trigger reindexing of all documents in Elasticsearch."""
+    """Trigger reindexing of all items in Elasticsearch."""
     try:
         # When reindexing, invalidate all search and suggest caches
         if ENDPOINT_CACHE:
@@ -779,7 +783,7 @@ async def reindex(callback: Optional[str] = Query(None, description="JSONP callb
             await invalidate_cache_with_prefix("app.api.v1.endpoints:search")
             await invalidate_cache_with_prefix("app.api.v1.endpoints:suggest")
 
-        result = await reindex_documents()
+        result = await reindex_items()
         return create_response(
             {"status": "success", "message": "Reindexing completed", "details": result}, callback
         )
@@ -790,45 +794,45 @@ async def reindex(callback: Optional[str] = Query(None, description="JSONP callb
         ) from e
 
 
-@router.post("/documents/{id}/identify-geo-entities")
+@router.post("/items/{id}/identify-geo-entities")
 async def identify_geo_entities(
     id: str,
     background_tasks: BackgroundTasks,
     callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
     """
-    Trigger the identification of geographic entities in a document.
+    Trigger the identification of geographic entities in an item.
     This endpoint will:
-    1. Fetch the document metadata
+    1. Fetch the item metadata
     2. Trigger an asynchronous task to identify geographic entities
     3. Return immediately with task ID
     """
     try:
-        # Fetch the document
+        # Fetch the item
         async with database.transaction():
-            query = select(geoblacklight_development).where(geoblacklight_development.c.id == id)
+            query = select(items).where(items.c.id == id)
             result = await database.fetch_one(query)
 
             if not result:
-                raise HTTPException(status_code=404, detail="Document not found")
+                raise HTTPException(status_code=404, detail="Item not found")
 
             # Convert to dict and handle datetime serialization
-            document = dict(result)
-            for key, value in document.items():
+            item = dict(result)
+            for key, value in item.items():
                 if isinstance(value, datetime):
-                    document[key] = value.isoformat()
+                    item[key] = value.isoformat()
 
-            logger.info(f"Processing document {id} for geographic entity identification")
-            logger.debug(f"Raw document data: {json.dumps(document, indent=2)}")
+            logger.info(f"Processing item {id} for geographic entity identification")
+            logger.debug(f"Raw item data: {json.dumps(item, indent=2)}")
 
             # Trigger the geographic entity identification task
-            geo_entities_task = generate_geo_entities.delay(item_id=id, metadata=document)
+            geo_entities_task = generate_geo_entities.delay(item_id=id, metadata=item)
             logger.info(
-                f"Started geographic entity identification task {geo_entities_task.id} for document {id}"
+                f"Started geographic entity identification task {geo_entities_task.id} for item {id}"
             )
 
-            # Invalidate the document cache since we'll be updating it
-            invalidate_cache_with_prefix(f"document:{id}")
+            # Invalidate the item cache since we'll be updating it
+            invalidate_cache_with_prefix(f"item:{id}")
 
             # Create response data
             response_data = {
@@ -840,60 +844,58 @@ async def identify_geo_entities(
             return create_response(response_data, callback)
 
     except Exception as e:
-        logger.error(
-            f"Error triggering geographic entity identification for document {id}: {str(e)}"
-        )
+        logger.error(f"Error triggering geographic entity identification for item {id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/documents/{id}/ocr")
+@router.post("/items/{id}/ocr")
 async def generate_ocr(
     id: str,
     background_tasks: BackgroundTasks,
     callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
     """
-    Trigger OCR generation for a document.
+    Trigger OCR generation for an item.
     This endpoint will:
-    1. Fetch the document metadata
+    1. Fetch the item metadata
     2. Get the asset path and type
     3. Trigger an asynchronous task to generate OCR text
     4. Return immediately with task ID
     """
     try:
-        # Fetch the document
+        # Fetch the item
         async with database.transaction():
-            query = select(geoblacklight_development).where(geoblacklight_development.c.id == id)
+            query = select(items).where(items.c.id == id)
             result = await database.fetch_one(query)
 
             if not result:
-                raise HTTPException(status_code=404, detail="Document not found")
+                raise HTTPException(status_code=404, detail="Item not found")
 
             # Convert to dict and handle datetime serialization
-            document = dict(result)
-            for key, value in document.items():
+            item = dict(result)
+            for key, value in item.items():
                 if isinstance(value, datetime):
-                    document[key] = value.isoformat()
+                    item[key] = value.isoformat()
 
-            logger.info(f"Processing document {id} for OCR")
-            logger.debug(f"Raw document data: {json.dumps(document, indent=2)}")
+            logger.info(f"Processing item {id} for OCR")
+            logger.debug(f"Raw item data: {json.dumps(item, indent=2)}")
 
             # Get asset information
             asset_path = None
             asset_type = None
 
             # Parse dct_references_s to identify candidate assets
-            references = document.get("dct_references_s", {})
-            logger.info(f"Raw references for document {id}: {references}")
+            references = item.get("dct_references_s", {})
+            logger.info(f"Raw references for item {id}: {references}")
 
             if isinstance(references, str):
                 try:
                     references = json.loads(references)
                     logger.info(
-                        f"Parsed references for document {id}: {json.dumps(references, indent=2)}"
+                        f"Parsed references for item {id}: {json.dumps(references, indent=2)}"
                     )
                 except json.JSONDecodeError:
-                    logger.error(f"Failed to parse references JSON for document {id}: {references}")
+                    logger.error(f"Failed to parse references JSON for item {id}: {references}")
                     references = {}
 
             # Define asset type mappings
@@ -910,7 +912,7 @@ async def generate_ocr(
                 if ref_type in references:
                     ref_value = references[ref_type]
                     logger.info(
-                        f"Found reference type {ref_type} with value {ref_value} for document {id}"
+                        f"Found reference type {ref_type} with value {ref_value} for item {id}"
                     )
 
                     # Handle both string and array values
@@ -923,25 +925,25 @@ async def generate_ocr(
                         asset_type = asset_type_name
                         break
 
-            # If no specific asset type was found, use the document format as fallback
+            # If no specific asset type was found, use the item format as fallback
             if not asset_type:
-                asset_type = document.get("dc_format_s")
+                asset_type = item.get("dc_format_s")
                 logger.info(f"No specific asset type found, using format fallback: {asset_type}")
 
             logger.info(
-                f"Final asset determination for document {id}: path={asset_path}, type={asset_type}"
+                f"Final asset determination for item {id}: path={asset_path}, type={asset_type}"
             )
 
             # Trigger the OCR task
             from app.tasks.ocr import generate_item_ocr
 
             ocr_task = generate_item_ocr.delay(
-                item_id=id, metadata=document, asset_path=asset_path, asset_type=asset_type
+                item_id=id, metadata=item, asset_path=asset_path, asset_type=asset_type
             )
-            logger.info(f"Started OCR task {ocr_task.id} for document {id}")
+            logger.info(f"Started OCR task {ocr_task.id} for item {id}")
 
-            # Invalidate the document cache since we'll be updating it
-            invalidate_cache_with_prefix(f"document:{id}")
+            # Invalidate the item cache since we'll be updating it
+            invalidate_cache_with_prefix(f"item:{id}")
 
             # Create response data
             response_data = {
@@ -953,5 +955,5 @@ async def generate_ocr(
             return create_response(response_data, callback)
 
     except Exception as e:
-        logger.error(f"Error triggering OCR generation for document {id}: {str(e)}")
+        logger.error(f"Error triggering OCR generation for item {id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e

@@ -43,7 +43,7 @@ The application uses several services:
 * [ParadeDB](https://www.paradedb.com/) (PostgreSQL-compatible database)
   - Port: 2345
   - Default credentials: postgres/postgres
-  - Database: geoblacklight_development
+  - Database: btaa_geometadata_api
 
 * [Elasticsearch](https://www.elastic.co/elasticsearch/) (Search engine)
   - Port: 9200
@@ -71,16 +71,47 @@ Start all services:
 docker compose up -d
 ```
 
-Import the GeoBlacklight test fixture data:
+Imports a flat file of GeoBlacklight OpenGeoMetadata Aardvark test fixture data:
 ```bash
 cd data
-gunzip geoblacklight_development.gz
-psql -h localhost -p 2345 -U postgres -d geoblacklight_development -f geoblacklight_development
+psql -h localhost -p 2345 -U postgres -d btaa_geometadata_api -f btaa_geometadata_api.txt
 ```
 
 Run the API server:
 ```bash
 uvicorn main:app --reload
+```
+
+## Run the Database migrations
+
+This script will create all the database tables needed for the application.
+
+```bash
+.venv/bin/python run_migrations.py
+```
+
+## Run the Item Relationships
+
+This script will populate the item_relationships triplestore.
+
+```bash
+.venv/bin/python scripts/populate_relationships.py
+```
+
+## Run the Elasticsearch index
+
+This script will create and populate the application ES index.
+
+```bash
+.venv/bin/python run_index.py
+```
+
+## Run the Gazetteers
+
+This script will download and import all the gazetteer data.
+
+```bash
+.venv/bin/python run_gazetteers.py
 ```
 
 ## Docker Hub
@@ -252,7 +283,7 @@ Data from Who's On First. [License](https://whosonfirst.org/docs/licenses/)
 - [ ] Item View - export conversions (Shapefile to: GeoJSON, CSV, TSV, etc)
 - [ ] Item View - code previews (Py, R, Leaflet)
 - [ ] Item View - embeds
-- [ ] Item View - allmaps integration
+- [ ] Item View - allmaps integration (via embeds)
 - [ ] Item View - data dictionaries
 - [ ] Item View - web services
 - [ ] Item View - metadata

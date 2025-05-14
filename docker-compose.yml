@@ -3,15 +3,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ewlarson/ogm-api:0.1.1
-    container_name: ogm-api
+    image: ewlarson/btaa-geometadata-api:0.1.1
+    container_name: btaa-geometadata-api
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/geoblacklight_development
+      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/btaa_geometadata_api
       - ELASTICSEARCH_URL=http://elasticsearch:9200
-      - ELASTICSEARCH_INDEX=geoblacklight
+      - ELASTICSEARCH_INDEX=btaa_geometadata_api
       - LOG_PATH=/app/logs
       - APPLICATION_URL=http://localhost:8000
-      - CORS_ORIGINS=http://localhost:5173,https://ewlarson.github.io,https://data-api.ngrok.io
+      - CORS_ORIGINS=http://localhost:5173,https://ewlarson.github.io,https://btaa-geometadata-api.ngrok.io
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_TTL=604800  # 7 days in seconds
@@ -24,9 +24,9 @@ services:
       elasticsearch:
         condition: service_healthy
       paradedb:
-        condition: service_started
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./logs:/app/logs
       - .:/app
@@ -36,7 +36,7 @@ services:
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.0.0
-    container_name: data-api-elasticsearch
+    container_name: btaa-geometadata-api-elasticsearch
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
@@ -59,21 +59,26 @@ services:
 
   paradedb:
     image: paradedb/paradedb:0.15.14
-    container_name: data-api-paradedb
+    container_name: btaa-geometadata-api-paradedb
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=geoblacklight_development
+      - POSTGRES_DB=btaa_geometadata_api
     ports:
       - "2345:5432"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     networks:
       - elastic
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d btaa_geometadata_api"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7.2
-    container_name: data-api-redis
+    container_name: btaa-geometadata-api-redis
     command: redis-server --appendonly yes  # Enable persistence
     ports:
       - "6379:6379"
@@ -94,7 +99,7 @@ services:
     command: >
       bash -c "apt-get update && apt-get install -y tesseract-ocr && celery -A app.tasks.worker worker --loglevel=INFO"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/geoblacklight_development
+      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/btaa_geometadata_api
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_TTL=604800
@@ -119,7 +124,7 @@ services:
     ports:
       - "5555:5555"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/geoblacklight_development
+      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/btaa_geometadata_api
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_TTL=604800
