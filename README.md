@@ -84,17 +84,31 @@ uvicorn main:app --reload
 
 ## Run the Database migrations
 
+This script will create all the database tables needed for the application.
+
 ```bash
 .venv/bin/python run_migrations.py
 ```
 
+## Run the Item Relationships
+
+This script will populate the item_relationships triplestore.
+
+```bash
+.venv/bin/python scripts/populate_relationships.py
+```
+
 ## Run the Elasticsearch index
+
+This script will create and populate the application ES index.
 
 ```bash
 .venv/bin/python run_index.py
 ```
 
 ## Run the Gazetteers
+
+This script will download and import all the gazetteer data.
 
 ```bash
 .venv/bin/python run_gazetteers.py
