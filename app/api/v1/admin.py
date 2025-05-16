@@ -1,28 +1,30 @@
+import json
+import logging
 import os
+from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.security import HTTPBasic
 from sqlalchemy import select
 
 from app.api.v1.auth import verify_credentials
 from app.api.v1.utils import create_response, sanitize_for_json
 from app.elasticsearch.index import reindex_items
-from app.services.cache_service import CacheService, invalidate_cache_with_prefix
-from app.services.image_service import ImageService
+from app.services.cache_service import ENDPOINT_CACHE, CacheService, invalidate_cache_with_prefix
 from app.tasks.entities import generate_geo_entities
-from app.tasks.ocr import generate_item_ocr
 from app.tasks.summarization import generate_item_summary
 from db.database import database
 from db.models import items
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "changeme")
 
 security = HTTPBasic()
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_credentials)])
 
 
 @router.post("/cache/clear")
@@ -30,12 +32,8 @@ async def clear_cache(
     cache_type: Optional[str] = Query(
         None, description="Type of cache to clear (search, item, suggest, all)"
     ),
-    credentials: HTTPBasicCredentials = None,
 ):
     """Clear specified cache or all cache if not specified."""
-    if credentials is None:
-        credentials = Depends(verify_credentials)
-
     try:
         cache_service = CacheService()
 
@@ -59,18 +57,21 @@ async def clear_cache(
 @router.post("/reindex")
 async def reindex(
     callback: Optional[str] = Query(None, description="JSONP callback name"),
-    credentials: HTTPBasicCredentials = None,
 ):
     """Trigger reindexing of all items in Elasticsearch."""
-    if credentials is None:
-        credentials = Depends(verify_credentials)
-
     try:
+        # When reindexing, invalidate all search and suggest caches
+        if ENDPOINT_CACHE:
+            logger.info("Invalidating search and suggest caches")
+            await invalidate_cache_with_prefix("app.api.v1.endpoints:search")
+            await invalidate_cache_with_prefix("app.api.v1.endpoints:suggest")
+
         result = await reindex_items()
         return create_response(
             {"status": "success", "message": "Reindexing completed", "details": result}, callback
         )
     except Exception as e:
+        logger.error(f"Reindexing failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500, detail={"message": "Reindexing failed", "error": str(e)}
         ) from e
@@ -79,13 +80,17 @@ async def reindex(
 @router.post("/items/{id}/summarize")
 async def summarize_item(
     id: str,
+    background_tasks: BackgroundTasks,
     callback: Optional[str] = Query(None, description="JSONP callback name"),
-    credentials: HTTPBasicCredentials = None,
 ):
-    """Trigger the generation of a summary and OCR text for an item."""
-    if credentials is None:
-        credentials = Depends(verify_credentials)
-
+    """
+    Trigger the generation of a summary for an item.
+    This endpoint will:
+    1. Fetch the item metadata
+    2. Get the asset path and type
+    3. Trigger an asynchronous task to generate the summary
+    4. Return immediately with task ID
+    """
     try:
         # Fetch the item
         async with database.transaction():
@@ -97,35 +102,113 @@ async def summarize_item(
 
             # Convert to dict and handle datetime serialization
             item = dict(result)
-            item = sanitize_for_json(item)
+            for key, value in item.items():
+                if isinstance(value, datetime):
+                    item[key] = value.isoformat()
 
-            # Trigger the summarization task
-            summary_task = generate_item_summary.delay(item_id=id, metadata=item)
+            logger.info(f"Processing item {id}")
+            logger.debug(f"Raw item data: {json.dumps(item, indent=2)}")
 
-            # Trigger the OCR task
-            ocr_task = generate_item_ocr.delay(item_id=id, metadata=item)
+            # Get asset information
+            asset_path = None
+            asset_type = None
 
-            response_data = {
-                "status": "success",
-                "message": "Summary and OCR generation started",
-                "tasks": {"summary": summary_task.id, "ocr": ocr_task.id},
+            # Parse dct_references_s to identify candidate assets
+            references = item.get("dct_references_s", {})
+            logger.info(f"Raw references for item {id}: {references}")
+
+            if isinstance(references, str):
+                try:
+                    references = json.loads(references)
+                    logger.info(
+                        f"Parsed references for item {id}: {json.dumps(references, indent=2)}"
+                    )
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse references JSON for item {id}: {references}")
+                    references = {}
+
+            # Define asset type mappings
+            asset_type_mappings = {
+                "http://schema.org/downloadUrl": "download",
+                "http://iiif.io/api/image": "iiif_image",
+                "http://iiif.io/api/presentation#manifest": "iiif_manifest",
+                "https://github.com/cogeotiff/cog-spec": "cog",
+                "https://github.com/protomaps/PMTiles": "pmtiles",
             }
 
-            return create_response(response_data, callback)
+            # Check for each reference type
+            for ref_type, asset_type_name in asset_type_mappings.items():
+                if ref_type in references:
+                    ref_value = references[ref_type]
+                    logger.info(
+                        f"Found reference type {ref_type} with value {ref_value} for item {id}"
+                    )
+
+                    # Handle both string and array values
+                    if isinstance(ref_value, list) and ref_value:
+                        # For arrays, take the first item for now
+                        asset_path = ref_value[0]
+                        asset_type = asset_type_name
+                        logger.info(
+                            f"Using first item from array: asset_path={asset_path}, "
+                            f"asset_type={asset_type}"
+                        )
+                        break
+                    elif isinstance(ref_value, str) and ref_value:
+                        asset_path = ref_value
+                        asset_type = asset_type_name
+                        logger.info(
+                            f"Using string value: asset_path={asset_path}, asset_type={asset_type}"
+                        )
+                        break
+
+            # If no specific asset type was found, use the item format as fallback
+            if not asset_type:
+                asset_type = item.get("dc_format_s")
+                logger.info(f"No specific asset type found, using format fallback: {asset_type}")
+
+            logger.info(
+                f"Final asset determination for item {id}: path={asset_path}, type={asset_type}"
+            )
+
+            # Trigger the summarization task
+            summary_task = generate_item_summary.delay(
+                item_id=id, metadata=item, asset_path=asset_path, asset_type=asset_type
+            )
+            logger.info(f"Started summary task {summary_task.id} for item {id}")
+
+            # Invalidate the item cache since we'll be updating it
+            invalidate_cache_with_prefix(f"item:{id}")
+
+            # Create response data and ensure all datetime objects are serialized
+            response_data = {
+                "status": "success",
+                "message": "Summary generation started",
+                "task_id": summary_task.id,
+            }
+
+            # Sanitize the response data before returning
+            sanitized_response = sanitize_for_json(response_data)
+            return create_response(sanitized_response, callback)
+
     except Exception as e:
+        logger.error(f"Error triggering summary generation for item {id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/items/{id}/identify-geo-entities")
 async def identify_geo_entities(
     id: str,
+    background_tasks: BackgroundTasks,
     callback: Optional[str] = Query(None, description="JSONP callback name"),
-    credentials: HTTPBasicCredentials = None,
 ):
-    """Trigger the identification of geographic entities in an item."""
-    if credentials is None:
-        credentials = Depends(verify_credentials)
-
+    """
+    Trigger the identification of geographic entities in an item.
+    This endpoint will:
+    1. Fetch the item metadata
+    2. Trigger an asynchronous task to identify geographic entities
+    3. Return immediately with task ID
+    """
     try:
         # Fetch the item
         async with database.transaction():
@@ -137,11 +220,24 @@ async def identify_geo_entities(
 
             # Convert to dict and handle datetime serialization
             item = dict(result)
-            item = sanitize_for_json(item)
+            for key, value in item.items():
+                if isinstance(value, datetime):
+                    item[key] = value.isoformat()
+
+            logger.info(f"Processing item {id} for geographic entity identification")
+            logger.debug(f"Raw item data: {json.dumps(item, indent=2)}")
 
             # Trigger the geographic entity identification task
             geo_entities_task = generate_geo_entities.delay(item_id=id, metadata=item)
+            logger.info(
+                f"Started geographic entity identification task {geo_entities_task.id} "
+                f"for item {id}"
+            )
 
+            # Invalidate the item cache since we'll be updating it
+            invalidate_cache_with_prefix(f"item:{id}")
+
+            # Create response data
             response_data = {
                 "status": "success",
                 "message": "Geographic entity identification started",
@@ -149,65 +245,7 @@ async def identify_geo_entities(
             }
 
             return create_response(response_data, callback)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.get("/thumbnails/{image_hash}")
-async def get_thumbnail(
-    image_hash: str,
-    credentials: HTTPBasicCredentials = None,
-):
-    """Serve a cached thumbnail image."""
-    if credentials is None:
-        credentials = Depends(verify_credentials)
-
-    try:
-        # Create service without item (we only need cache access)
-        image_service = ImageService({})
-        image_data = await image_service.get_cached_image(image_hash)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-    if not image_data:
-        raise HTTPException(status_code=404, detail="Image not found")
-
-    return Response(
-        content=image_data,
-        media_type="image/jpeg",
-        headers={"Cache-Control": "public, max-age=31536000"},  # Cache for 1 year
-    )
-
-
-@router.get("/items/{id}/summaries")
-async def get_item_summaries(
-    id: str,
-    callback: Optional[str] = Query(None, description="JSONP callback name"),
-    credentials: HTTPBasicCredentials = None,
-):
-    """Get all summaries for an item."""
-    if credentials is None:
-        credentials = Depends(verify_credentials)
-
-    try:
-        # Query the database for summaries
-        async with database.transaction():
-            query = """
-                SELECT * FROM ai_enrichments 
-                WHERE item_id = :item_id 
-                ORDER BY created_at DESC
-            """
-            summaries = await database.fetch_all(query, {"item_id": id})
-
-            # Convert to list of dicts and sanitize
-            summaries_list = [sanitize_for_json(dict(summary)) for summary in summaries]
-
-            # Create response
-            response_data = {
-                "data": {"type": "summaries", "id": id, "attributes": {"summaries": summaries_list}}
-            }
-
-            return create_response(response_data, callback)
 
     except Exception as e:
+        logger.error(f"Error triggering geographic entity identification for item {id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e

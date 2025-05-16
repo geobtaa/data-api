@@ -10,8 +10,6 @@ RUN apt-get update && apt-get install -y \
     libjpeg-dev \
     zlib1g-dev \
     libpng-dev \
-    tesseract-ocr \
-    tesseract-ocr-eng \
     gdal-bin \
     libgdal-dev \
     curl \

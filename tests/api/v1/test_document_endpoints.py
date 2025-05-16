@@ -2,8 +2,8 @@ import json
 from unittest.mock import patch
 
 import pytest
-from fastapi.testclient import TestClient
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from app.main import app
 from app.services.relationship_service import RelationshipService
@@ -119,9 +119,11 @@ async def test_get_item(
 @patch("app.services.search_service.SearchService.get_item")
 async def test_get_item_not_found(mock_get_item):
     """Test the get_item endpoint with non-existent ID."""
+
     # Setup mock to raise NotFoundError
     async def raise_not_found(*args, **kwargs):
         raise HTTPException(status_code=404, detail="Item not found")
+
     mock_get_item.side_effect = raise_not_found
 
     # Call endpoint

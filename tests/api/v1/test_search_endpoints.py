@@ -23,9 +23,9 @@ def mock_search_response():
                 "per_item": "10ms",
                 "thumbnail_service": "5ms",
                 "citation_service": "5ms",
-                "viewer_service": "10ms"
+                "viewer_service": "10ms",
             },
-            "total_response_time": "30ms"
+            "total_response_time": "30ms",
         },
         "meta": {
             "pages": {
@@ -37,9 +37,9 @@ def mock_search_response():
                 "offset_value": 0,
                 "total_count": 45,
                 "first_page?": True,
-                "last_page?": False
+                "last_page?": False,
             },
-            "spelling_suggestions": []
+            "spelling_suggestions": [],
         },
         "data": [
             {
@@ -49,8 +49,8 @@ def mock_search_response():
                 "attributes": {
                     "dct_title_s": "Test Document 1",
                     "dct_description_sm": ["Test description 1"],
-                    "dct_creator_sm": ["Test Creator 1"]
-                }
+                    "dct_creator_sm": ["Test Creator 1"],
+                },
             },
             {
                 "type": "document",
@@ -59,11 +59,11 @@ def mock_search_response():
                 "attributes": {
                     "dct_title_s": "Test Document 2",
                     "dct_description_sm": ["Test description 2"],
-                    "dct_creator_sm": ["Test Creator 2"]
-                }
-            }
+                    "dct_creator_sm": ["Test Creator 2"],
+                },
+            },
         ],
-        "included": []
+        "included": [],
     }
 
 

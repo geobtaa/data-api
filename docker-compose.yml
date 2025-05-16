@@ -96,8 +96,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: >
-      bash -c "apt-get update && apt-get install -y tesseract-ocr && celery -A app.tasks.worker worker --loglevel=INFO"
+    command: celery -A app.tasks.worker worker --loglevel=INFO
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/btaa_geometadata_api
       - REDIS_HOST=redis

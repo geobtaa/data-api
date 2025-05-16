@@ -145,10 +145,10 @@ class SearchService:
             try:
                 result = await self.es.get(index=self.index_name, id=id)
             except NotFoundError:
-                raise HTTPException(status_code=404, detail="Item not found")
+                raise HTTPException(status_code=404, detail="Item not found") from None
             except Exception as e:
                 logger.error(f"Elasticsearch error getting item {id}: {str(e)}", exc_info=True)
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(status_code=500, detail=str(e)) from e
 
             source_data = result["_source"]
 

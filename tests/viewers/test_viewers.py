@@ -1,12 +1,12 @@
-from app.viewers import ItemViewer
 import pytest
 import pytest_asyncio
+
+from app.viewers import ItemViewer
 
 
 def pytest_configure(config):
     config.addinivalue_line(
-        "markers",
-        "ignore_event_loop: mark test to ignore event loop closed errors"
+        "markers", "ignore_event_loop: mark test to ignore event loop closed errors"
     )
 
 
