@@ -1,7 +1,10 @@
 import json
+import logging
 from typing import Dict, Union
 
 from ..viewers import ItemViewer
+
+logger = logging.getLogger(__name__)
 
 
 def parse_references(document: Union[Dict, object]) -> Dict:
@@ -19,6 +22,8 @@ def parse_references(document: Union[Dict, object]) -> Dict:
                 refs = json.loads(refs)
             except json.JSONDecodeError:
                 refs = {}
+        elif not isinstance(refs, dict):
+            refs = {}
 
         # Add geometry if present
         if hasattr(document, "locn_geometry"):
@@ -30,7 +35,8 @@ def parse_references(document: Union[Dict, object]) -> Dict:
             refs["locn_geometry"] = geom
 
         return refs
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error parsing references: {str(e)}", exc_info=True)
         return {}
 
 
@@ -41,10 +47,44 @@ def create_viewer_attributes(document: Union[Dict, object]) -> Dict:
         document = dict(document)
 
     references = parse_references(document)
+    logger.debug(f"Parsed references: {json.dumps(references, indent=2)}")
+
     viewer = ItemViewer(references)
+
+    try:
+        geometry = viewer.viewer_geometry()
+        logger.debug(f"Viewer geometry: {json.dumps(geometry, indent=2)}")
+    except Exception as e:
+        logger.error(f"Error getting viewer geometry: {str(e)}", exc_info=True)
+        geometry = None
 
     return {
         "ui_viewer_protocol": viewer.viewer_protocol(),
         "ui_viewer_endpoint": viewer.viewer_endpoint(),
-        "ui_viewer_geometry": viewer.viewer_geometry(),
+        "ui_viewer_geometry": geometry,
     }
+
+
+class ViewerService:
+    """Service for handling viewer-related functionality."""
+
+    def __init__(self, document: Union[Dict, object]):
+        """Initialize the service with a document."""
+        self.document = document
+        self.references = parse_references(document)
+        self.viewer = ItemViewer(self.references)
+
+    def get_viewer_attributes(self) -> Dict:
+        """Get all viewer attributes for the document."""
+        try:
+            geometry = self.viewer.viewer_geometry()
+            logger.debug(f"Viewer geometry: {json.dumps(geometry, indent=2)}")
+        except Exception as e:
+            logger.error(f"Error getting viewer geometry: {str(e)}", exc_info=True)
+            geometry = None
+
+        return {
+            "ui_viewer_protocol": self.viewer.viewer_protocol(),
+            "ui_viewer_endpoint": self.viewer.viewer_endpoint(),
+            "ui_viewer_geometry": geometry,
+        }

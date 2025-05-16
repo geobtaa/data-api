@@ -1,36 +1,37 @@
 import json
 import logging
 import os
-import time
 from datetime import datetime
-from typing import Any, Dict, Optional
-from urllib.parse import parse_qs
+from typing import Dict, Optional
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import select
 
+from app.api.v1.utils import (
+    JSONResponse,
+    add_citations,
+    add_thumbnail_url,
+    add_ui_attributes,
+    create_response,
+    sanitize_for_json,
+)
 from app.elasticsearch.index import reindex_items
-from app.services.download_service import DownloadService
-from db.database import database
-from db.models import items
-
-from ...elasticsearch import search_items
-from ...elasticsearch.client import es
-from ...services.cache_service import (
+from app.services.cache_service import (
     ENDPOINT_CACHE,
-    CacheService,
     cached_endpoint,
     invalidate_cache_with_prefix,
 )
-from ...services.citation_service import CitationService
-from ...services.image_service import ImageService
-from ...services.viewer_service import create_viewer_attributes
-from ...tasks.entities import generate_geo_entities
-from ...tasks.summarization import generate_item_summary
-from .jsonp import JSONPResponse
-from .shared import SORT_MAPPINGS, SortOption
+from app.services.citation_service import CitationService
+from app.services.download_service import DownloadService
+from app.services.image_service import ImageService
+from app.services.search_service import SearchService
+from app.tasks.entities import generate_geo_entities
+from app.tasks.ocr import generate_item_ocr
+from app.tasks.summarization import generate_item_summary
+from db.database import database
+from db.models import items
 
 # Load environment variables from .env file
 load_dotenv()
@@ -58,14 +59,7 @@ async def api_root():
             "description": (
                 "API for accessing geospatial data from the Big Ten Academic Alliance Geoportal"
             ),
-            "endpoints": [
-                "/items",
-                "/search",
-                "/suggest",
-                "/thumbnails",
-                "/cache/clear",
-                "/reindex",
-            ],
+            "endpoints": ["/items", "/search", "/suggest"],
         }
     )
 
@@ -95,33 +89,6 @@ def add_citations(item: Dict) -> Dict:
         logger.error(f"Failed to generate citation: {str(e)}")
         item["attributes"]["ui_citation"] = "Citation unavailable"
     return item
-
-
-def sanitize_for_json(obj: Any) -> Any:
-    """Recursively convert datetime objects to ISO format strings."""
-    if isinstance(obj, dict):
-        return {key: sanitize_for_json(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [sanitize_for_json(item) for item in obj]
-    elif isinstance(obj, datetime):
-        return obj.isoformat()
-    return obj
-
-
-def create_response(
-    content: Dict | JSONResponse, callback: Optional[str] = None, status_code: int = 200
-) -> JSONResponse:
-    """Create either a JSON or JSONP response based on callback parameter."""
-    # If content is already a JSONResponse, return it as is
-    if isinstance(content, JSONResponse):
-        return content
-
-    # Sanitize content before serialization
-    sanitized_content = sanitize_for_json(content)
-
-    if callback:
-        return JSONPResponse(content=sanitized_content, callback=callback, status_code=status_code)
-    return JSONResponse(content=sanitized_content, status_code=status_code)
 
 
 def add_ui_attributes(item: Dict) -> Dict:
@@ -154,111 +121,25 @@ def add_ui_attributes(item: Dict) -> Dict:
     return item
 
 
-async def get_item_relationships(item_id: str) -> Dict:
-    """Get all relationships for an item."""
-    try:
-        logger.info(f"Fetching relationships for item: {item_id}")
-
-        # Get outgoing relationships (where item is subject)
-        relationships_query = """
-            SELECT predicate, object_id, dct_title_s
-            FROM item_relationships
-            JOIN items 
-            ON items.id = item_relationships.object_id
-            WHERE subject_id = :item_id
-            ORDER BY dct_title_s ASC
-        """
-        db_relationships = await database.fetch_all(relationships_query, {"item_id": item_id})
-        logger.info(f"Found {len(db_relationships)} relationships")
-        logger.info(f"Relationships: {db_relationships}")
-
-        relationships = {}
-
-        # Process outgoing relationships
-        for rel in db_relationships:
-            if rel["predicate"] not in relationships:
-                relationships[rel["predicate"]] = []
-            relationships[rel["predicate"]].append(
-                {
-                    "item_id": rel["object_id"],
-                    "item_title": rel["dct_title_s"],
-                    "link": f"{base_url}/items/{rel['object_id']}",
-                }
-            )
-            logger.debug(f"Added relationship: {rel['predicate']} -> {rel['object_id']}")
-
-        logger.info(f"Final relationships structure: {relationships}")
-        return relationships
-
-    except Exception as e:
-        logger.error(f"Error getting relationships: {e}", exc_info=True)
-        return {}
-
-
 @router.get("/items/{id}")
 @cached_endpoint(ttl=ITEM_CACHE_TTL)
 async def get_item(
     id: str,
-    callback: Optional[str] = None,
-    include_relationships: bool = True,
-    include_summaries: bool = True,
+    callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
     """Get a single item by ID."""
     try:
-        # Get item
-        query = items.select().where(items.c.id == id)
-        result = await database.fetch_one(query)
+        search_service = SearchService()
+        item = await search_service.get_item(id)
+        if not item:
+            return JSONResponse(content={"error": "Item not found"}, status_code=404)
 
-        if not result:
-            raise HTTPException(status_code=404, detail="Item not found")
-
-        # Convert to dict and process
-        item = dict(result)
-
-        # Add UI attributes
-        processed_item = add_ui_attributes(item)
-
-        # Get relationships
-        if include_relationships:
-            relationships = await get_item_relationships(id)
-            logger.info(f"Got relationships for {id}: {relationships}")  # Debug line
-        else:
-            relationships = {}
-
-        # Add relationships to UI attributes
-        processed_item["ui_relationships"] = relationships
-
-        # Get summaries if requested
-        summaries = []
-        if include_summaries:
-            try:
-                summaries_query = """
-                    SELECT * FROM item_ai_enrichments 
-                    WHERE item_id = :item_id 
-                    ORDER BY created_at DESC
-                """
-                summaries_result = await database.fetch_all(summaries_query, {"item_id": id})
-                summaries = [dict(summary) for summary in summaries_result]
-                logger.info(f"Got {len(summaries)} summaries for {id}")
-            except Exception as e:
-                logger.error(f"Error fetching summaries: {str(e)}")
-                summaries = []
-
-        # Add summaries to UI attributes
-        processed_item["ui_summaries"] = summaries
-
-        # Create response
-        response = {"data": {"type": "item", "id": id, "attributes": processed_item}}
-
-        logger.info(f"Final response structure: {response}")  # Debug line
-        return create_response(response, callback)
-
-    except HTTPException:
-        # Re-raise HTTPException to be handled by FastAPI's exception handler
-        raise
+        # Sanitize the item data for JSON serialization
+        item = sanitize_for_json(item)
+        return create_response(item, callback)
     except Exception as e:
-        logger.error(f"Item fetch failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error getting item {id}: {str(e)}", exc_info=True)
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 @router.get("/items/")
@@ -273,7 +154,8 @@ async def list_items(
 
     processed_items = []
     for item in results:
-        item_dict = dict(item)
+        # Convert to dict and sanitize datetime objects
+        item_dict = sanitize_for_json(dict(item))
         item_dict = add_thumbnail_url(item_dict)
         item_dict = add_citations(item_dict)
         viewer_attributes = create_viewer_attributes(item_dict)
@@ -294,7 +176,7 @@ async def list_items(
                     "ui_viewer_endpoint": viewer_attributes.get("ui_viewer_endpoint"),
                     "ui_viewer_geometry": viewer_attributes.get("ui_viewer_geometry"),
                     "ui_viewer_protocol": viewer_attributes.get("ui_viewer_protocol"),
-                    "ui_downloads": ui_downloads,  # Include ui_downloads in the response
+                    "ui_downloads": ui_downloads,
                 },
             }
         )
@@ -307,281 +189,47 @@ async def list_items(
 async def search(
     request: Request,
     q: Optional[str] = Query(None, description="Search query"),
-    page: int = Query(1, ge=1, description="Page number"),
-    limit: int = Query(10, ge=1, le=100, description="Results per page"),
-    sort: Optional[SortOption] = None,
+    page: int = Query(1, description="Page number"),
+    per_page: int = Query(10, description="Items per page"),
     callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
-    """Search endpoint with caching support."""
+    """Search items."""
     try:
-        # Set default sort option inside the function instead of in the parameter default
-        if sort is None:
-            sort = SortOption.RELEVANCE
-
-        timings = {}
-        cache_status = "miss"  # Default to cache miss for timing info
-
-        if ENDPOINT_CACHE:
-            timings["cache"] = "enabled"
-        else:
-            timings["cache"] = "disabled"
-
-        start_time = time.time()
-
-        # Calculate skip from page/limit
-        skip = (page - 1) * limit
-
-        # Get filter queries from request
-        query_string = str(request.query_params)
-        filter_query = extract_filter_queries(query_string)
-
-        # Get sort mapping
-        sort_mapping = SORT_MAPPINGS.get(sort, None)
-
-        # Elasticsearch query
-        es_start = time.time()
-        results = await search_items(
-            query=q,
-            fq=filter_query,
-            skip=skip,
-            limit=limit,
-            sort=sort_mapping,
+        search_service = SearchService()
+        results = await search_service.search(
+            q=q,
+            page=page,
+            limit=per_page,
+            request_query_params=str(request.query_params),
+            callback=callback,
         )
-        es_time = (time.time() - es_start) * 1000
-        timings["elasticsearch"] = f"{es_time:.0f}ms"
 
-        # Process each item
-        process_start = time.time()
-        docs_processed = 0
-        citation_time = 0
-        thumbnail_time = 0
-        viewer_time = 0
+        # Sanitize the results for JSON serialization
+        results = sanitize_for_json(results)
 
-        for item in results["data"]:
-            doc_start = time.time()
+        # Create the response
+        response = create_response(results, callback)
 
-            # Add thumbnail URL
-            thumb_start = time.time()
-            image_service = ImageService(item["attributes"])
-            item["attributes"]["ui_thumbnail_url"] = image_service.get_thumbnail_url()
-            thumbnail_time += time.time() - thumb_start
-
-            # Add citation
-            cite_start = time.time()
-            citation_service = CitationService(item["attributes"])
-            item["attributes"]["ui_citation"] = citation_service.get_citation()
-            citation_time += time.time() - cite_start
-
-            # Add viewer attributes
-            viewer_start = time.time()
-            viewer_attrs = create_viewer_attributes(item["attributes"])
-            item["attributes"].update(viewer_attrs)
-            viewer_time += time.time() - viewer_start
-
-            docs_processed += 1
-
-        process_time = time.time() - process_start
-        timings["item_processing"] = {
-            "total": f"{(process_time * 1000):.0f}ms",
-            "per_item": (
-                f"{((process_time / docs_processed) * 1000):.0f}ms" if docs_processed > 0 else "0ms"
-            ),
-            "thumbnail_service": f"{(thumbnail_time * 1000):.0f}ms",
-            "citation_service": f"{(citation_time * 1000):.0f}ms",
-            "viewer_service": f"{(viewer_time * 1000):.0f}ms",
-        }
-
-        total_time = time.time() - start_time
-        timings["total_response_time"] = f"{(total_time * 1000):.0f}ms"
-
-        results["query_time"] = timings
-
-        # Extract and add suggestions to meta if they exist
-        if "meta" in results and "suggestions" in results["meta"]:
-            results["meta"]["spelling_suggestions"] = results["meta"].pop("suggestions")
-
-        # Sanitize the entire results object for JSON
-        sanitized_results = sanitize_for_json(results)
-
-        return create_response(sanitized_results, callback)
-
+        # Return the response
+        return response
     except Exception as e:
-        logger.error("Search endpoint error", exc_info=True)
-        error_response = {
-            "message": "Search operation failed",
-            "error": str(e),
-            "query": q,
-            "filters": filter_query if "filter_query" in locals() else None,
-            "sort": sort.value if sort else None,
-        }
-        return create_response(error_response, callback)
-
-
-def extract_filter_queries(params: Dict) -> Dict:
-    """Extract filter queries from request parameters."""
-    filter_query = {}
-    # Parse the raw query string to handle multiple values
-    raw_params = parse_qs(str(params))
-
-    agg_to_field = {
-        "id_agg": "id",
-        "spatial_agg": "dct_spatial_sm",
-        "resource_type_agg": "gbl_resourcetype_sm",
-        "resource_class_agg": "gbl_resourceclass_sm",
-        "index_year_agg": "gbl_indexyear_im",
-        "language_agg": "dct_language_sm",
-        "creator_agg": "dct_creator_sm",
-        "provider_agg": "schema_provider_s",
-        "access_rights_agg": "dct_accessrights_sm",
-        "georeferenced_agg": "gbl_georeferenced_b",
-    }
-
-    for key, values in raw_params.items():
-        if key.startswith("fq[") and key.endswith("][]"):
-            field = key[3:-3]  # Remove 'fq[' and '[]'
-            if field in agg_to_field:
-                es_field = agg_to_field[field]
-                if values:  # values is already a list from parse_qs
-                    filter_query[es_field] = values
-
-    return filter_query
+        logger.error(f"Error performing search: {str(e)}", exc_info=True)
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 @router.get("/suggest")
 @cached_endpoint(ttl=SUGGEST_CACHE_TTL)
 async def suggest(
-    q: str = Query(..., description="Query string for suggestions"),
-    resource_class: Optional[str] = Query(None, description="Filter suggestions by resource class"),
-    size: int = Query(5, ge=1, le=20, description="Number of suggestions to return"),
+    q: str = Query(..., description="Search query for suggestions"),
     callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
-    """Get autocomplete suggestions with caching support."""
+    """Get search suggestions."""
     try:
-        # Simplified query without contexts first
-        suggest_query = {
-            "_source": [
-                "dct_title_s",
-                "dct_creator_sm",
-                "dct_publisher_sm",
-                "schema_provider_s",
-                "dct_subject_sm",
-                "dct_spatial_sm",
-            ],
-            "suggest": {
-                "my-suggestion": {  # Changed name to be more explicit
-                    "prefix": q,
-                    "completion": {
-                        "field": "suggest",
-                        "size": size,
-                        "skip_duplicates": True,
-                        "fuzzy": {"fuzziness": "AUTO"},
-                    },
-                }
-            },
-        }
-
-        index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_geometadata_api")
-
-        # Print the query for debugging
-        # print("Suggest Query:", json.dumps(suggest_query, indent=2))
-
-        response = await es.search(index=index_name, body=suggest_query)
-
-        # Convert response to dict for serialization
-        response_dict = response.body
-
-        # Print the full response for debugging
-        # print("ES Response:", json.dumps(response_dict, indent=2))
-
-        suggestions = []
-        seen_ids = set()  # Track seen suggestion IDs
-        if response_dict.get("suggest", {}).get("my-suggestion"):
-            for suggestion in response_dict["suggest"]["my-suggestion"]:
-                # print(f"Processing suggestion: {suggestion}")  # Debug print
-                if options := suggestion.get("options", []):
-                    for option in options:
-                        suggestion_id = option["_id"]
-                        if suggestion_id not in seen_ids:  # Check for duplicates
-                            seen_ids.add(suggestion_id)
-                            suggestions.append(
-                                {
-                                    "type": "suggestion",
-                                    "id": suggestion_id,
-                                    "attributes": {
-                                        "text": option.get("text", ""),
-                                        "title": option.get("_source", {}).get("dct_title_s", ""),
-                                        "score": option.get("_score", 0),
-                                    },
-                                }
-                            )
-
-        response = {
-            "data": suggestions,
-            "meta": {
-                "query": q,
-                "resource_class": resource_class,
-                "es_query": suggest_query,
-                "es_response": response_dict,
-            },
-        }
-
-        return create_response(response, callback)
-
+        search_service = SearchService()
+        suggestions = await search_service.suggest(q)
+        return create_response(suggestions, callback)
     except Exception as e:
-        # print(f"Suggestion error: {e}")
-        error_response = {"detail": f"Suggestion error: {str(e)}\nQuery: {suggest_query}"}
-        return create_response(error_response, callback)
-
-
-@router.get("/cache/clear")
-async def clear_cache(
-    cache_type: Optional[str] = Query(
-        None, description="Type of cache to clear (search, item, suggest, all)"
-    ),
-):
-    """Clear specified cache or all cache if not specified."""
-    if not ENDPOINT_CACHE:
-        return JSONResponse(
-            content={"message": "Caching is disabled. Set ENDPOINT_CACHE=true to enable."}
-        )
-
-    try:
-        cache_service = CacheService()
-
-        if cache_type == "search" or cache_type is None:
-            await invalidate_cache_with_prefix("app.api.v1.endpoints:search")
-
-        if cache_type == "item" or cache_type is None:
-            await invalidate_cache_with_prefix("app.api.v1.endpoints:get_item")
-
-        if cache_type == "suggest" or cache_type is None:
-            await invalidate_cache_with_prefix("app.api.v1.endpoints:suggest")
-
-        if cache_type == "all" or cache_type is None:
-            await cache_service.flush_all()
-
-        return JSONResponse(
-            content={"message": f"Cache cleared successfully: {cache_type or 'all'}"}
-        )
-    except Exception as e:
-        logger.error(f"Error clearing cache: {str(e)}")
-        return JSONResponse(content={"error": f"Failed to clear cache: {str(e)}"}, status_code=500)
-
-
-async def perform_bulk_indexing(bulk_data, index_name, bulk_size=100):
-    """Perform bulk indexing in smaller chunks."""
-    # Split the bulk_data into smaller chunks
-    for i in range(0, len(bulk_data), bulk_size):
-        chunk = bulk_data[i : i + bulk_size]
-        try:
-            # Perform the bulk operation for the current chunk
-            response = await es.bulk(operations=chunk, index=index_name, refresh=True)
-            # Check for errors in the response
-            if response.get("errors"):
-                logger.error(f"Errors occurred during bulk indexing: {response['items']}")
-        except Exception as e:
-            logger.error(f"Exception during bulk indexing: {str(e)}")
-            # Optionally, implement retry logic here
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 @router.get("/thumbnails/{image_hash}")
@@ -707,8 +355,6 @@ async def summarize_item(
             # If we have an asset, also trigger OCR
             ocr_task = None
             if asset_path and asset_type:
-                from app.tasks.ocr import generate_item_ocr
-
                 ocr_task = generate_item_ocr.delay(
                     item_id=id, metadata=item, asset_path=asset_path, asset_type=asset_type
                 )
@@ -938,8 +584,6 @@ async def generate_ocr(
             )
 
             # Trigger the OCR task
-            from app.tasks.ocr import generate_item_ocr
-
             ocr_task = generate_item_ocr.delay(
                 item_id=id, metadata=item, asset_path=asset_path, asset_type=asset_type
             )

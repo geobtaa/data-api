@@ -48,74 +48,108 @@ async def prepare_bulk_data(items, index_name):
 
 async def process_item(item_dict):
     """Process a single item for indexing."""
+    processed_dict = {}
+
     for key, value in item_dict.items():
         if isinstance(value, (list, tuple)):
-            item_dict[key] = list(value)
+            processed_dict[key] = list(value)
         elif key == "dct_references_s" and value:
             try:
-                item_dict[key] = json.loads(value)
+                processed_dict[key] = json.loads(value)
             except json.JSONDecodeError:
-                item_dict[key] = value
-        elif key == "locn_geometry":
-            try:
-                item_dict[key] = process_geometry(value)
-            except Exception:
-                item_dict[key] = None
-        elif key == "dcat_bbox":
-            try:
-                item_dict[key] = process_geometry(value)
-            except Exception:
-                item_dict[key] = None
-        elif key == "dcat_centroid":
-            try:
-                item_dict[key] = process_geometry(value)
-            except Exception:
-                item_dict[key] = None
+                processed_dict[key] = value
+        # Handle geometry fields
+        elif key in ["locn_geometry", "dcat_bbox", "dcat_centroid"]:
+            # Store original string value
+            processed_dict[f"{key}_original"] = value
+            # Convert to GeoJSON for Elasticsearch
+            if value:
+                try:
+                    # Check if it's an ENVELOPE format (case insensitive)
+                    envelope_match = re.match(
+                        r"ENVELOPE\(([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\)",
+                        value,
+                        re.IGNORECASE,
+                    )
+                    if envelope_match:
+                        # Extract coordinates from ENVELOPE(minx,maxx,maxy,miny)
+                        minx, maxx, maxy, miny = map(float, envelope_match.groups())
+                        # Create a polygon from the envelope coordinates in counterclockwise order
+                        processed_dict[key] = {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [
+                                    [minx, miny],  # bottom left
+                                    [maxx, miny],  # bottom right
+                                    [maxx, maxy],  # top right
+                                    [minx, maxy],  # top left
+                                    [minx, miny],  # close the polygon
+                                ]
+                            ],
+                        }
+                    else:
+                        # Try to parse as JSON if it's not an ENVELOPE
+                        try:
+                            geom = json.loads(value)
+                            if isinstance(geom, dict) and "type" in geom:
+                                # Ensure type is capitalized
+                                geom["type"] = geom["type"].capitalize()
+                                processed_dict[key] = geom
+                            else:
+                                processed_dict[key] = None
+                        except json.JSONDecodeError:
+                            processed_dict[key] = None
+                except Exception:
+                    processed_dict[key] = None
+            else:
+                processed_dict[key] = None
+        else:
+            processed_dict[key] = value
 
     # Add summaries to the document
-    item_dict["ai_summaries"] = await get_item_summaries(item_dict["id"])
+    processed_dict["ai_summaries"] = await get_item_summaries(processed_dict["id"])
 
     # Clean and prepare suggestion inputs
     suggestion_inputs = []
 
     # Add title if it exists
-    if title := item_dict.get("dct_title_s"):
+    if title := processed_dict.get("dct_title_s"):
         suggestion_inputs.append(title)
 
     # Add creators
-    if creators := item_dict.get("dct_creator_sm"):
+    if creators := processed_dict.get("dct_creator_sm"):
         if isinstance(creators, list):
             suggestion_inputs.extend(creators)
         else:
             suggestion_inputs.append(creators)
 
     # Add publishers
-    if publishers := item_dict.get("dct_publisher_sm"):
+    if publishers := processed_dict.get("dct_publisher_sm"):
         if isinstance(publishers, list):
             suggestion_inputs.extend(publishers)
         else:
             suggestion_inputs.append(publishers)
 
     # Add provider
-    if provider := item_dict.get("schema_provider_s"):
+    if provider := processed_dict.get("schema_provider_s"):
         suggestion_inputs.append(provider)
 
     # Add subjects
-    if subjects := item_dict.get("dct_subject_sm"):
+    if subjects := processed_dict.get("dct_subject_sm"):
         if isinstance(subjects, list):
             suggestion_inputs.extend(subjects)
         else:
             suggestion_inputs.append(subjects)
 
     # Add spatial
-    if spatial := item_dict.get("dct_spatial_sm"):
+    if spatial := processed_dict.get("dct_spatial_sm"):
         if isinstance(spatial, list):
             suggestion_inputs.extend(spatial)
         else:
             suggestion_inputs.append(spatial)
 
     # Add keywords
-    if keywords := item_dict.get("dcat_keyword_sm"):
+    if keywords := processed_dict.get("dcat_keyword_sm"):
         if isinstance(keywords, list):
             suggestion_inputs.extend(keywords)
         else:
@@ -125,16 +159,16 @@ async def process_item(item_dict):
     suggestion_inputs = [s for s in suggestion_inputs if s and str(s).strip()]
 
     # Get resource classes, ensuring it's a list and has at least one value
-    resource_classes = item_dict.get("gbl_resourceclass_sm", [])
+    resource_classes = processed_dict.get("gbl_resourceclass_sm", [])
     if isinstance(resource_classes, str):
         resource_classes = [resource_classes]
     if not resource_classes:
         resource_classes = ["none"]
 
     # Add suggestion field with cleaned data - removed contexts
-    item_dict["suggest"] = {"input": suggestion_inputs}
+    processed_dict["suggest"] = {"input": suggestion_inputs}
 
-    return item_dict
+    return processed_dict
 
 
 async def get_item_summaries(item_id):
