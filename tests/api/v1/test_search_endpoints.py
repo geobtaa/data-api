@@ -16,8 +16,16 @@ def mock_search_response():
     return {
         "status": "success",
         "query_time": {
+            "cache": "0ms",
             "elasticsearch": "10ms",
-            "postgresql": "20ms",
+            "item_processing": {
+                "total": "20ms",
+                "per_item": "10ms",
+                "thumbnail_service": "5ms",
+                "citation_service": "5ms",
+                "viewer_service": "10ms",
+            },
+            "total_response_time": "30ms",
         },
         "meta": {
             "pages": {
@@ -31,7 +39,7 @@ def mock_search_response():
                 "first_page?": True,
                 "last_page?": False,
             },
-            "suggestions": [],
+            "spelling_suggestions": [],
         },
         "data": [
             {
@@ -90,11 +98,11 @@ def mock_suggest_response():
 
 
 @pytest.mark.asyncio
-@patch("app.api.v1.endpoints.search_items")
-async def test_search_endpoint(mock_search_items, mock_search_response):
+@patch("app.services.search_service.SearchService.search")
+async def test_search_endpoint(mock_search, mock_search_response):
     """Test the search endpoint."""
     # Setup mock
-    mock_search_items.return_value = mock_search_response
+    mock_search.return_value = mock_search_response
 
     # Call endpoint with basic query
     response = client.get("/api/v1/search?q=test&page=1&limit=10")
@@ -110,12 +118,12 @@ async def test_search_endpoint(mock_search_items, mock_search_response):
     assert data["data"][0]["id"] == "test-doc-1"
     assert data["data"][0]["attributes"]["dct_title_s"] == "Test Document 1"
 
-    # Verify that search_items was called with correct parameters
-    mock_search_items.assert_called_once()
+    # Verify that search was called with correct parameters
+    mock_search.assert_called_once()
     # Check the arguments
-    args, kwargs = mock_search_items.call_args
-    assert kwargs["query"] == "test"
-    assert kwargs["skip"] == 0
+    args, kwargs = mock_search.call_args
+    assert kwargs["q"] == "test"
+    assert kwargs["page"] == 1
     assert kwargs["limit"] == 10
 
     # Test the response is valid against the search schema
@@ -128,11 +136,11 @@ async def test_search_endpoint(mock_search_items, mock_search_response):
 
 
 @pytest.mark.asyncio
-@patch("app.api.v1.endpoints.search_items")
-async def test_search_with_sort(mock_search_items, mock_search_response):
+@patch("app.services.search_service.SearchService.search")
+async def test_search_with_sort(mock_search, mock_search_response):
     """Test the search endpoint with sorting."""
     # Setup mock
-    mock_search_items.return_value = mock_search_response
+    mock_search.return_value = mock_search_response
 
     # Call endpoint with sort parameter
     response = client.get("/api/v1/search?q=test&sort=year_desc")
@@ -140,19 +148,19 @@ async def test_search_with_sort(mock_search_items, mock_search_response):
     # Verify the response
     assert response.status_code == 200
 
-    # Verify that search_items was called with correct parameters
-    mock_search_items.assert_called_once()
+    # Verify that search was called with correct parameters
+    mock_search.assert_called_once()
     # Check the sort argument
-    args, kwargs = mock_search_items.call_args
+    args, kwargs = mock_search.call_args
     assert kwargs["sort"] is not None
 
 
 @pytest.mark.asyncio
-@patch("app.api.v1.endpoints.search_items")
-async def test_search_with_filters(mock_search_items, mock_search_response):
+@patch("app.services.search_service.SearchService.search")
+async def test_search_with_filters(mock_search, mock_search_response):
     """Test the search endpoint with filters."""
     # Setup mock
-    mock_search_items.return_value = mock_search_response
+    mock_search.return_value = mock_search_response
 
     # Call endpoint with filter parameters
     response = client.get(
@@ -162,11 +170,13 @@ async def test_search_with_filters(mock_search_items, mock_search_response):
     # Verify the response
     assert response.status_code == 200
 
-    # Verify that search_items was called with correct filter parameters
-    mock_search_items.assert_called_once()
-    args, kwargs = mock_search_items.call_args
-    assert "fq" in kwargs
-    assert kwargs["fq"] is not None
+    # Verify that search was called with correct filter parameters
+    mock_search.assert_called_once()
+    args, kwargs = mock_search.call_args
+    assert "request_query_params" in kwargs
+    query_params = kwargs["request_query_params"]
+    assert "fq%5Bdct_spatial_sm%5D%5B%5D=Minnesota" in query_params
+    assert "fq%5Bschema_provider_s%5D%5B%5D=Test+Provider" in query_params
 
 
 @pytest.mark.asyncio

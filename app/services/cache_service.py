@@ -9,6 +9,8 @@ from typing import Any, Optional
 import redis.asyncio as redis
 from dotenv import load_dotenv
 
+from app.api.v1.utils import JSONResponse
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -164,6 +166,9 @@ def cached_endpoint(ttl=DEFAULT_CACHE_TTL):
 
             if cached_result is not None:
                 logger.debug(f"Cache hit for {cache_key}")
+                # If the original function returns a JSONResponse, wrap the cached data
+                if isinstance(cached_result, dict):
+                    return JSONResponse(content=cached_result)
                 return cached_result
 
             # Cache miss, execute the function
@@ -171,9 +176,10 @@ def cached_endpoint(ttl=DEFAULT_CACHE_TTL):
             try:
                 result = await func(*args, **kwargs)
                 # Only cache successful responses (status code 200)
-                if isinstance(result, dict) or (
-                    hasattr(result, "status_code") and result.status_code == 200
-                ):
+                if isinstance(result, JSONResponse) and result.status_code == 200:
+                    # Cache the content of the response, not the response object
+                    await cache_service.set(cache_key, result.body, ttl)
+                elif isinstance(result, dict):
                     await cache_service.set(cache_key, result, ttl)
                 return result
             except Exception:

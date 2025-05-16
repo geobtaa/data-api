@@ -86,21 +86,29 @@ class ItemViewer:
 
         geometry = self.references["locn_geometry"]
 
-        # print(geometry)
-        # Check if it's an ENVELOPE format
+        # If geometry is already a dictionary, return it if it's valid GeoJSON
+        if isinstance(geometry, dict):
+            if "type" in geometry and "coordinates" in geometry:
+                # Ensure type is properly capitalized
+                geometry["type"] = geometry["type"].capitalize()
+                return geometry
+            return None
 
+        # If geometry is a string, try to parse it
+        if not isinstance(geometry, str):
+            return None
+
+        # Check if it's an ENVELOPE format
         envelope_match = re.match(
             r"ENVELOPE\(([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\)", geometry
         )
-
-        # print(envelope_match)
 
         if envelope_match:
             # Extract coordinates from ENVELOPE(minx,maxx,maxy,miny)
             minx, maxx, maxy, miny = map(float, envelope_match.groups())
             # Create a polygon from the envelope coordinates
             return {
-                "type": "Polygon",
+                "type": "Polygon",  # Ensure proper capitalization
                 "coordinates": [
                     [
                         [minx, maxy],  # top left
@@ -123,12 +131,15 @@ class ItemViewer:
             # Ensure the polygon is closed by repeating the first point at the end
             if coordinates[0] != coordinates[-1]:
                 coordinates.append(coordinates[0])
-            return {"type": "Polygon", "coordinates": [coordinates]}
+            return {"type": "Polygon", "coordinates": [coordinates]}  # Ensure proper capitalization
 
         # Try parsing as JSON (handling escaped quotes)
         try:
             # Replace escaped quotes and parse
             clean_geometry = geometry.replace("&quot;", '"')
-            return json.loads(clean_geometry)
+            geojson = json.loads(clean_geometry)
+            if isinstance(geojson, dict) and "type" in geojson:
+                geojson["type"] = geojson["type"].capitalize()
+            return geojson
         except json.JSONDecodeError:
             return None
