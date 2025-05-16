@@ -3,8 +3,10 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+from fastapi import HTTPException
 
 from app.main import app
+from app.services.relationship_service import RelationshipService
 
 client = TestClient(app)
 
@@ -70,22 +72,32 @@ def mock_summaries():
 
 
 @pytest.mark.asyncio
-@patch("app.api.v1.endpoints.database.fetch_one")
-@patch("app.api.v1.endpoints.get_item_relationships")
-@patch("app.api.v1.endpoints.database.fetch_all")
+@patch("app.services.search_service.SearchService.get_item")
 async def test_get_item(
-    mock_fetch_all,
-    mock_get_relationships,
-    mock_fetch_one,
+    mock_get_item,
     mock_item,
     mock_relationships,
     mock_summaries,
 ):
     """Test the get_item endpoint."""
-    # Setup mocks
-    mock_fetch_one.return_value = mock_item
-    mock_get_relationships.return_value = mock_relationships
-    mock_fetch_all.return_value = mock_summaries
+    # Setup mock response from SearchService
+    mock_get_item.return_value = {
+        "data": {
+            "type": "item",
+            "id": mock_item["id"],
+            "attributes": {
+                **mock_item,
+                "ui_thumbnail_url": "https://example.com/thumbnail.jpg",
+                "ui_citation": "Test Citation",
+                "ui_downloads": {"pdf": "https://example.com/download.pdf"},
+                "ui_relationships": mock_relationships,
+                "ui_summaries": mock_summaries,
+                "ui_viewer_endpoint": "https://example.com/viewer",
+                "ui_viewer_geometry": "POINT(0 0)",
+                "ui_viewer_protocol": "iiif",
+            },
+        }
+    }
 
     # Call endpoint
     response = client.get(f"/api/v1/items/{mock_item['id']}")
@@ -104,11 +116,13 @@ async def test_get_item(
 
 
 @pytest.mark.asyncio
-@patch("app.api.v1.endpoints.database.fetch_one")
-async def test_get_item_not_found(mock_fetch_one):
+@patch("app.services.search_service.SearchService.get_item")
+async def test_get_item_not_found(mock_get_item):
     """Test the get_item endpoint with non-existent ID."""
-    # Setup mock to return None (item not found)
-    mock_fetch_one.return_value = None
+    # Setup mock to raise NotFoundError
+    async def raise_not_found(*args, **kwargs):
+        raise HTTPException(status_code=404, detail="Item not found")
+    mock_get_item.side_effect = raise_not_found
 
     # Call endpoint
     response = client.get("/api/v1/items/non-existent-id")
@@ -153,10 +167,9 @@ async def test_get_item_relationships(mock_fetch_all):
         {"predicate": "hasPart", "object_id": "related-item-2", "dct_title_s": "Related Item 2"},
     ]
 
-    # Call function directly
-    from app.api.v1.endpoints import get_item_relationships
-
-    relationships = await get_item_relationships("test-item-id")
+    # Create service instance and call method
+    relationship_service = RelationshipService()
+    relationships = await relationship_service.get_item_relationships("test-item-id")
 
     # Verify result
     assert "isPartOf" in relationships

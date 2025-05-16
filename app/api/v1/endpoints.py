@@ -27,6 +27,7 @@ from app.services.citation_service import CitationService
 from app.services.download_service import DownloadService
 from app.services.image_service import ImageService
 from app.services.search_service import SearchService
+from app.services.viewer_service import ViewerService
 from app.tasks.entities import generate_geo_entities
 from app.tasks.ocr import generate_item_ocr
 from app.tasks.summarization import generate_item_summary
@@ -137,6 +138,9 @@ async def get_item(
         # Sanitize the item data for JSON serialization
         item = sanitize_for_json(item)
         return create_response(item, callback)
+    except HTTPException as e:
+        # Re-raise HTTP exceptions to maintain their status code
+        raise
     except Exception as e:
         logger.error(f"Error getting item {id}: {str(e)}", exc_info=True)
         return JSONResponse(content={"error": str(e)}, status_code=500)
@@ -158,7 +162,10 @@ async def list_items(
         item_dict = sanitize_for_json(dict(item))
         item_dict = add_thumbnail_url(item_dict)
         item_dict = add_citations(item_dict)
-        viewer_attributes = create_viewer_attributes(item_dict)
+
+        # Use ViewerService to get viewer attributes
+        viewer_service = ViewerService(item_dict)
+        viewer_attributes = viewer_service.get_viewer_attributes()
 
         # Use DownloadService to get download options
         download_service = DownloadService(item_dict)
@@ -191,6 +198,7 @@ async def search(
     q: Optional[str] = Query(None, description="Search query"),
     page: int = Query(1, description="Page number"),
     per_page: int = Query(10, description="Items per page"),
+    sort: Optional[str] = Query(None, description="Sort option (relevance, year_desc, year_asc, title_asc, title_desc)"),
     callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
     """Search items."""
@@ -200,6 +208,7 @@ async def search(
             q=q,
             page=page,
             limit=per_page,
+            sort=sort,
             request_query_params=str(request.query_params),
             callback=callback,
         )

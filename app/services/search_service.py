@@ -5,6 +5,7 @@ import time
 from typing import Dict, Optional
 from urllib.parse import parse_qs
 
+from elasticsearch.exceptions import NotFoundError
 from fastapi import HTTPException
 
 from app.api.v1.shared import SORT_MAPPINGS
@@ -141,7 +142,14 @@ class SearchService:
         """Get a single item by ID."""
         try:
             # Get the item from Elasticsearch
-            result = await self.es.get(index=self.index_name, id=id)
+            try:
+                result = await self.es.get(index=self.index_name, id=id)
+            except NotFoundError:
+                raise HTTPException(status_code=404, detail="Item not found")
+            except Exception as e:
+                logger.error(f"Elasticsearch error getting item {id}: {str(e)}", exc_info=True)
+                raise HTTPException(status_code=500, detail=str(e))
+
             source_data = result["_source"]
 
             # Create services
@@ -168,7 +176,8 @@ class SearchService:
             # Add relationships if requested
             if include_relationships:
                 try:
-                    relationships = await RelationshipService.get_item_relationships(id)
+                    relationship_service = RelationshipService()
+                    relationships = await relationship_service.get_item_relationships(id)
                     source_data["ui_relationships"] = relationships
                 except Exception as e:
                     logger.error(f"Error getting relationships: {e}", exc_info=True)
@@ -201,6 +210,8 @@ class SearchService:
 
             return response
 
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Error getting item {id}: {str(e)}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e)) from e

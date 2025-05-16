@@ -49,7 +49,7 @@ def test_application_startup():
 def test_api_docs_available():
     """Test that the API documentation is available."""
     client = TestClient(app)
-    response = client.get("/docs")
+    response = client.get("/api/docs")
     assert response.status_code == 200
     assert "swagger" in response.text.lower()
 
@@ -57,7 +57,7 @@ def test_api_docs_available():
 def test_redoc_available():
     """Test that the ReDoc documentation is available."""
     client = TestClient(app)
-    response = client.get("/redoc")
+    response = client.get("/api/redoc")
     assert response.status_code == 200
     assert "redoc" in response.text.lower()
 
