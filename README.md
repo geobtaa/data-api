@@ -1,6 +1,6 @@
-# BTAA GeoMetadata API
+# BTAA OpenGeoMetadata API
 
-![Data API](docs/data-api.png)
+![BTAA OGM API](docs/data-api.png)
 
 ## Development
 
@@ -43,7 +43,7 @@ The application uses several services:
 * [ParadeDB](https://www.paradedb.com/) (PostgreSQL-compatible database)
   - Port: 2345
   - Default credentials: postgres/postgres
-  - Database: btaa_geometadata_api
+  - Database: btaa_ogm_api
 
 * [Elasticsearch](https://www.elastic.co/elasticsearch/) (Search engine)
   - Port: 9200
@@ -74,7 +74,7 @@ docker compose up -d
 Imports a flat file of GeoBlacklight OpenGeoMetadata Aardvark test fixture data:
 ```bash
 cd data
-psql -h localhost -p 2345 -U postgres -d btaa_geometadata_api -f btaa_geometadata_api.txt
+psql -h localhost -p 2345 -U postgres -d btaa_ogm_api -f btaa_ogm_api.txt
 ```
 
 Run the API server:

@@ -1,13 +1,13 @@
 services:
   paradedb_test:
     image: paradedb/paradedb:latest
-    container_name: btaa-geometadata-api-paradedb-test
+    container_name: btaa-ogm-api-paradedb-test
     env_file:
       - .env.test
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=btaa_geometadata_api_test
+      - POSTGRES_DB=btaa_ogm_api_test
     ports:
       - "2346:5432"  # Different port from dev database
     volumes:

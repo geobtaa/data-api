@@ -16,7 +16,7 @@ load_dotenv(".env.test", override=True)
 # Get test database URL from environment or use default
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:2345/btaa_geometadata_api_test"
+    "postgresql://postgres:postgres@localhost:2345/btaa_ogm_api_test"
 )
 
 # Parse database URL
@@ -36,7 +36,7 @@ def pytest_configure(config):
     
     # Set test environment variables
     os.environ["DATABASE_URL"] = DATABASE_URL
-    os.environ["ELASTICSEARCH_INDEX"] = "btaa_geometadata_api_test"
+    os.environ["ELASTICSEARCH_INDEX"] = "btaa_ogm_api_test"
     os.environ["LOG_PATH"] = "./test_logs"
     os.environ["ENDPOINT_CACHE"] = "true"
     

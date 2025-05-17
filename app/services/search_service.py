@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 class SearchService:
     def __init__(self):
-        self.index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_geometadata_api")
+        self.index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_ogm_api")
         self.es = es
 
     async def search(

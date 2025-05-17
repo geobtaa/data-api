@@ -1,7 +1,7 @@
 [project]
 name = "data-api"
 version = "0.1.0"
-description = "BTAA GeoMetadata API"
+description = "BTAA OpenGeoMetadata API"
 authors = [
     {name = "Eric Larson", email = "ewlarson@gmail.com"},
 ]

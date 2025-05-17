@@ -7,7 +7,7 @@ load_dotenv()
 
 # Get the database URL with a default value
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://postgres:postgres@paradedb:5432/btaa_geometadata_api"
+    "DATABASE_URL", "postgresql://postgres:postgres@paradedb:5432/btaa_ogm_api"
 )
 
 # Convert the DATABASE_URL to use asyncpg if it's using postgres://

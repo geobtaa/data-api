@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 # Set the correct database URL for migrations
-os.environ["DATABASE_URL"] = "postgresql://postgres:postgres@localhost:2345/btaa_geometadata_api"
+os.environ["DATABASE_URL"] = "postgresql://postgres:postgres@localhost:2345/btaa_ogm_api"
 
 # Import and run each migration
 from db.migrations.create_gazetteer_tables import create_gazetteer_tables

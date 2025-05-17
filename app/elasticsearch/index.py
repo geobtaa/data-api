@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 async def index_items():
     """Index all items from PostgreSQL into Elasticsearch."""
-    index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_geometadata_api")
+    index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_ogm_api")
 
     if await es.indices.exists(index=index_name):
         await es.indices.delete(index=index_name)

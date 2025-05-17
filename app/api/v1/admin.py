@@ -19,13 +19,8 @@ from db.models import items
 
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "changeme")
-
 security = HTTPBasic()
 router = APIRouter(dependencies=[Depends(verify_credentials)])
-
 
 @router.post("/cache/clear")
 async def clear_cache(

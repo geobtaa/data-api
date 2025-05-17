@@ -39,7 +39,7 @@ async def search_items(
     if limit <= 0:
         limit = 20  # Default to 20 if limit is zero or negative
 
-    index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_geometadata_api")
+    index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_ogm_api")
 
     try:
         # Get the current search criteria

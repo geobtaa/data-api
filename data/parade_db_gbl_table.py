@@ -37,7 +37,7 @@ data = pd.read_csv(csv_file_path, low_memory=False)
 
 # Connect to PostgreSQL using environment variables
 conn = psycopg2.connect(
-    dbname=os.getenv("POSTGRES_DB", "btaa_geometadata_api"),
+    dbname=os.getenv("POSTGRES_DB", "btaa_ogm_api"),
     user=os.getenv("POSTGRES_USER", "postgres"),
     password=os.getenv("POSTGRES_PASSWORD", "postgres"),
     host=os.getenv("POSTGRES_HOST", "paradedb"),  # Use the Docker service name

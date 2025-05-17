@@ -24,7 +24,7 @@ async def init_elasticsearch():
     """Initialize Elasticsearch index and mappings."""
     from .mappings import INDEX_MAPPING
 
-    index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_geometadata_api")
+    index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_ogm_api")
 
     try:
         # Test the connection

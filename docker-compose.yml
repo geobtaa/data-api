@@ -3,21 +3,23 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ewlarson/btaa-geometadata-api:0.1.1
-    container_name: btaa-geometadata-api
+    image: ewlarson/btaa-ogm-api:0.1.1
+    container_name: btaa-ogm-api-app
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/btaa_geometadata_api
+      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/btaa_ogm_api
       - ELASTICSEARCH_URL=http://elasticsearch:9200
-      - ELASTICSEARCH_INDEX=btaa_geometadata_api
+      - ELASTICSEARCH_INDEX=btaa_ogm_api
       - LOG_PATH=/app/logs
       - APPLICATION_URL=http://localhost:8000
-      - CORS_ORIGINS=http://localhost:5173,https://ewlarson.github.io,https://btaa-geometadata-api.ngrok.io
+      - CORS_ORIGINS=http://localhost:5173,https://ewlarson.github.io,https://btaa-ogm-api.ngrok.io
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_TTL=604800  # 7 days in seconds
       - LOG_LEVEL=DEBUG
       - ENDPOINT_CACHE=true  # Enable endpoint caching
       - GAZETTEER_CACHE_TTL=3600  # 1 hour in seconds
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=changeme
     ports:
       - "8000:8000"
     depends_on:
@@ -36,7 +38,7 @@ services:
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.0.0
-    container_name: btaa-geometadata-api-elasticsearch
+    container_name: btaa-ogm-api-elasticsearch
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
@@ -59,11 +61,11 @@ services:
 
   paradedb:
     image: paradedb/paradedb:0.15.14
-    container_name: btaa-geometadata-api-paradedb
+    container_name: btaa-ogm-api-paradedb
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=btaa_geometadata_api
+      - POSTGRES_DB=btaa_ogm_api
     ports:
       - "2345:5432"
     volumes:
@@ -71,14 +73,14 @@ services:
     networks:
       - elastic
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d btaa_geometadata_api"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d btaa_ogm_api"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7.2
-    container_name: btaa-geometadata-api-redis
+    container_name: btaa-ogm-api-redis
     command: redis-server --appendonly yes  # Enable persistence
     ports:
       - "6379:6379"
@@ -96,9 +98,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: btaa-ogm-api-celery
     command: celery -A app.tasks.worker worker --loglevel=INFO
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/btaa_geometadata_api
+      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/btaa_ogm_api
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_TTL=604800
@@ -118,12 +121,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: btaa-ogm-api-flower
     command: >
       bash -c "cd /app && celery -A app.tasks.worker flower --port=5555"
     ports:
       - "5555:5555"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/btaa_geometadata_api
+      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/btaa_ogm_api
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_TTL=604800

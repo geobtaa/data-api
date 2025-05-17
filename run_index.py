@@ -15,7 +15,7 @@ load_dotenv()
 
 async def verify_index():
     """Verify that the index exists and has documents."""
-    index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_geometadata_api")
+    index_name = os.getenv("ELASTICSEARCH_INDEX", "btaa_ogm_api")
     
     try:
         # Check if index exists
