@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -14,8 +14,11 @@ logger = logging.getLogger(__name__)
 security = HTTPBasic()
 
 
-def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+def verify_credentials(credentials: HTTPBasicCredentials = None):
     """Verify admin credentials."""
+    if credentials is None:
+        credentials = Depends(security)
+
     correct_username = credentials.username == ADMIN_USERNAME
     correct_password = credentials.password == ADMIN_PASSWORD
 

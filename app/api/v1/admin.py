@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 from datetime import datetime
 from typing import Optional
 
@@ -21,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 security = HTTPBasic()
 router = APIRouter(dependencies=[Depends(verify_credentials)])
+
 
 @router.post("/cache/clear")
 async def clear_cache(
