@@ -1,6 +1,6 @@
 # BTAA OpenGeoMetadata API
 
-![BTAA OGM API](docs/data-api.png)
+![BTAA OGM API](docs/btaa_ogm_api.png)
 
 ## Development
 

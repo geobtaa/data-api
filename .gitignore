@@ -164,6 +164,9 @@ cython_debug/
 
 # Data
 
+# Fixtures
+data/fixtures/*.csv
+
 # Gazetteer data
 data/gazetteers/**/*.csv
 data/gazetteers/**/*.txt
