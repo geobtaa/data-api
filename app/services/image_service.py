@@ -158,7 +158,7 @@ class ImageService:
         """
         try:
             # Skip if not a IIIF URL
-            if not any(x in url.lower() for x in ["/iiif/", "info.json"]):
+            if not any(x in url.lower() for x in ["/iiif/", "info.json", "/i/image/api/image/"]):
                 return url
 
             # Remove any existing size parameters
@@ -170,6 +170,8 @@ class ImageService:
                 "/full/\d+,/",
                 "/full/,\d+/",
                 "/full/\d+,\d+/",
+                "/full/full/0/default.jpg",
+                "/full/full/0/default.png",
             ]:
                 base_url = re.sub(pattern, "/full/", base_url, flags=re.IGNORECASE)
 
@@ -303,6 +305,9 @@ class ImageService:
                 )
 
             if thumbnail_url:
+                # Standardize IIIF URLs to ensure consistent size
+                thumbnail_url = self._standardize_iiif_url(thumbnail_url)
+
                 # Check if we have the image cached
                 image_hash = hashlib.sha256(thumbnail_url.encode()).hexdigest()
                 image_key = f"image:{image_hash}"
