@@ -182,6 +182,27 @@ class ImageService:
             self.logger.error(f"Error standardizing IIIF URL {url}: {e}")
             return url
 
+    def _validate_thumbnail_url(self, url: str) -> bool:
+        """
+        Validate that a thumbnail URL is accessible.
+
+        Args:
+            url: The thumbnail URL to validate
+
+        Returns:
+            bool: True if URL is accessible, False otherwise
+        """
+        try:
+            response = requests.head(url, timeout=2.0, allow_redirects=True)
+            if response.status_code == 200:
+                content_type = response.headers.get("content-type", "").lower()
+                return content_type.startswith("image/")
+            self.logger.warning(f"Thumbnail URL returned status {response.status_code}: {url}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Error validating thumbnail URL {url}: {e}")
+            return False
+
     def get_thumbnail_url(self) -> Optional[str]:
         """
         Get the thumbnail URL from document metadata with caching support.
@@ -224,7 +245,7 @@ class ImageService:
                 iiif_url = references["http://iiif.io/api/image"]
                 if isinstance(iiif_url, list) and iiif_url:
                     iiif_url = iiif_url[0]
-
+                
                 # Transform ContentDM IIIF URLs
                 if "contentdm.oclc.org" in iiif_url:
                     # Extract collection and item ID from the URL
@@ -233,7 +254,7 @@ class ImageService:
                         collection, item_id = match.groups()
                         # Construct the correct IIIF URL format
                         thumbnail_url = f"https://cdm16022.contentdm.oclc.org/iiif/2/{collection}:{item_id}/full/200,/0/default.jpg"
-
+                
                 # For non-ContentDM IIIF URLs, use standard format
                 if not thumbnail_url:
                     thumbnail_url = f"{iiif_url}/full/200,/0/default.jpg"
@@ -258,7 +279,7 @@ class ImageService:
             elif "urn:x-esri:serviceType:ArcGIS#DynamicMapLayer" in references:
                 viewer_endpoint = references["urn:x-esri:serviceType:ArcGIS#DynamicMapLayer"]
                 thumbnail_url = f"{viewer_endpoint}/info/thumbnail/thumbnail.png"
-
+            
             # Check for WMS
             elif "http://www.opengis.net/def/serviceType/ogc/wms" in references:
                 wms_endpoint = references["http://www.opengis.net/def/serviceType/ogc/wms"]
@@ -273,7 +294,7 @@ class ImageService:
                     f"HEIGHT={height}&"
                     f"LAYERS={layers}"
                 )
-
+            
             # Check for TMS
             elif "http://www.opengis.net/def/serviceType/ogc/tms" in references:
                 tms_endpoint = references["http://www.opengis.net/def/serviceType/ogc/tms"]
@@ -285,15 +306,19 @@ class ImageService:
                 # Check if we have the image cached
                 image_hash = hashlib.sha256(thumbnail_url.encode()).hexdigest()
                 image_key = f"image:{image_hash}"
-
+                
                 if self.image_cache.exists(image_key):
                     self.logger.info(f"🚀 Cache HIT for image {doc_id}")
                     return f"{self.application_url}/api/v1/thumbnails/{image_hash}"
+                
+                # Validate the thumbnail URL before queueing for caching
+                if not self._validate_thumbnail_url(thumbnail_url):
+                    self.logger.warning(f"Invalid thumbnail URL for {doc_id}: {thumbnail_url}")
+                    return None
 
                 # If not cached, queue for background processing and return original URL
                 self.logger.info(f"🐌 Queueing image fetch for {doc_id}: {thumbnail_url}")
                 from app.tasks.worker import fetch_and_cache_image
-
                 task = fetch_and_cache_image.delay(thumbnail_url)
                 self.logger.info(f"Task ID: {task.id}")
                 return thumbnail_url
