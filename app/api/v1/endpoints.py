@@ -5,12 +5,17 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.sql import select
 
 from app.api.v1.utils import (
     add_thumbnail_url,
     create_response,
     sanitize_for_json,
 )
+from app.services.allmaps_service import AllmapsService
 from app.services.cache_service import (
     cached_endpoint,
 )
@@ -18,7 +23,7 @@ from app.services.download_service import DownloadService
 from app.services.image_service import ImageService
 from app.services.search_service import SearchService
 from app.services.viewer_service import ViewerService
-from db.database import database
+from db.config import DATABASE_URL
 from db.models import items
 
 # Load environment variables from .env file
@@ -27,6 +32,10 @@ load_dotenv()
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+# Create async engine and session
+engine = create_async_engine(DATABASE_URL)
+async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 base_url = os.getenv("APPLICATION_URL", "http://localhost:8000/api/v1/")
 
@@ -61,13 +70,25 @@ async def get_item(
     """Get a single item by ID."""
     try:
         search_service = SearchService()
-        item = await search_service.get_item(id)
-        if not item:
+        response = await search_service.get_item(id)
+        if not response:
             return JSONResponse(content={"error": "Item not found"}, status_code=404)
 
         # Sanitize the item data for JSON serialization
-        item = sanitize_for_json(item)
-        return create_response(item, callback)
+        response = sanitize_for_json(response)
+
+        # Add Allmaps data
+        logger.info(f"Processing item data: {response}")
+        async with async_session() as session:
+            allmaps_service = AllmapsService(
+                {"id": id, "attributes": response["data"]["attributes"]}
+            )
+            allmaps_attributes = await allmaps_service.get_allmaps_attributes(session)
+            logger.info(f"Got Allmaps attributes: {allmaps_attributes}")
+            # Update the attributes dictionary
+            response["data"]["attributes"].update(allmaps_attributes)
+
+        return create_response(response, callback)
     except HTTPException:
         # Re-raise HTTP exceptions to maintain their status code
         raise
@@ -83,41 +104,72 @@ async def list_items(
     limit: int = 10,
     callback: Optional[str] = Query(None, description="JSONP callback name"),
 ):
-    query = items.select().offset(skip).limit(limit)
-    results = await database.fetch_all(query)
+    try:
+        async with async_session() as session:
+            query = select(items).offset(skip).limit(limit)
+            logger.info(f"Executing query: {query}")
+            result = await session.execute(query)
+            results = result.fetchall()  # Get full rows instead of scalars
+            logger.info(f"Found {len(results)} items")
 
-    processed_items = []
-    for item in results:
-        # Convert to dict and sanitize datetime objects
-        item_dict = sanitize_for_json(dict(item))
-        item_dict = add_thumbnail_url(item_dict)
+            processed_items = []
+            for row in results:
+                try:
+                    logger.info(f"Processing item: {row}")
+                    # Convert to dict and sanitize datetime objects
+                    item_dict = sanitize_for_json(dict(row._mapping))
+                    logger.info(f"Item dict: {item_dict}")
+                    item_dict = add_thumbnail_url(item_dict)
 
-        # Use ViewerService to get viewer attributes
-        viewer_service = ViewerService(item_dict)
-        viewer_attributes = viewer_service.get_viewer_attributes()
+                    # Use ViewerService to get viewer attributes
+                    viewer_service = ViewerService(item_dict)
+                    viewer_attributes = viewer_service.get_viewer_attributes()
+                    logger.info(f"Viewer attributes: {viewer_attributes}")
 
-        # Use DownloadService to get download options
-        download_service = DownloadService(item_dict)
-        ui_downloads = download_service.get_download_options()
+                    # Use DownloadService to get download options
+                    download_service = DownloadService(item_dict)
+                    ui_downloads = download_service.get_download_options()
+                    logger.info(f"Download options: {ui_downloads}")
 
-        processed_items.append(
-            {
-                "type": "item",
-                "id": str(item_dict["id"]),
-                "attributes": {
-                    **item_dict,
-                    **viewer_attributes,
-                    "ui_citation": item_dict.get("ui_citation"),
-                    "ui_thumbnail_url": item_dict.get("ui_thumbnail_url"),
-                    "ui_viewer_endpoint": viewer_attributes.get("ui_viewer_endpoint"),
-                    "ui_viewer_geometry": viewer_attributes.get("ui_viewer_geometry"),
-                    "ui_viewer_protocol": viewer_attributes.get("ui_viewer_protocol"),
-                    "ui_downloads": ui_downloads,
-                },
-            }
-        )
+                    # Get Allmaps attributes
+                    allmaps_service = AllmapsService(item_dict)
+                    allmaps_attributes = await allmaps_service.get_allmaps_attributes(session)
+                    logger.info(f"Allmaps attributes: {allmaps_attributes}")
 
-    return create_response({"data": processed_items}, callback)
+                    # Create the attributes dictionary
+                    attributes = {
+                        **item_dict,
+                        "ui_citation": item_dict.get("ui_citation"),
+                        "ui_thumbnail_url": item_dict.get("ui_thumbnail_url"),
+                        "ui_viewer_endpoint": viewer_attributes.get("ui_viewer_endpoint"),
+                        "ui_viewer_geometry": viewer_attributes.get("ui_viewer_geometry"),
+                        "ui_viewer_protocol": viewer_attributes.get("ui_viewer_protocol"),
+                        "ui_downloads": ui_downloads,
+                    }
+
+                    # Add viewer attributes
+                    for key, value in viewer_attributes.items():
+                        if key not in attributes:
+                            attributes[key] = value
+
+                    # Add Allmaps attributes
+                    for key, value in allmaps_attributes.items():
+                        if key not in attributes:
+                            attributes[key] = value
+
+                    processed_items.append(
+                        {"type": "item", "id": str(item_dict["id"]), "attributes": attributes}
+                    )
+                    logger.info(f"Successfully processed item {item_dict['id']}")
+                except Exception as e:
+                    logger.error(f"Error processing item: {str(e)}", exc_info=True)
+                    continue
+
+            logger.info(f"Returning {len(processed_items)} processed items")
+            return create_response({"data": processed_items}, callback)
+    except Exception as e:
+        logger.error(f"Error in list_items: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/search")
@@ -200,13 +252,14 @@ async def get_item_summaries(
     """Get all summaries for an item."""
     try:
         # Query the database for summaries
-        async with database.transaction():
-            query = """
+        async with async_session() as session:
+            query = text("""
                 SELECT * FROM ai_enrichments 
                 WHERE item_id = :item_id 
                 ORDER BY created_at DESC
-            """
-            summaries = await database.fetch_all(query, {"item_id": id})
+            """)
+            result = await session.execute(query, {"item_id": id})
+            summaries = result.fetchall()
 
             # Convert to list of dicts and sanitize
             summaries_list = [sanitize_for_json(dict(summary)) for summary in summaries]

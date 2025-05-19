@@ -13,6 +13,7 @@ from sqlalchemy import (
     Table,
     Text,
 )
+from sqlalchemy.sql import func
 
 metadata = MetaData()
 
@@ -253,6 +254,21 @@ item_ai_enrichments = Table(
     Column("prompt", JSON, nullable=True),
     Column("output_parser", JSON, nullable=True),
     Column("response", JSON, nullable=True),
+    Column("created_at", TIMESTAMP, nullable=False),
+    Column("updated_at", TIMESTAMP, nullable=False),
+)
+
+# Allmaps annotation table
+item_allmaps = Table(
+    "item_allmaps",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("item_id", String, nullable=False, index=True),
+    Column("allmaps_id", String, nullable=True, index=True),
+    Column("iiif_manifest_uri", String, nullable=True),
+    Column("annotated", Boolean, server_default="false", nullable=False),
+    Column("iiif_manifest", Text, nullable=True),
+    Column("allmaps_annotation", Text, nullable=True),
     Column("created_at", TIMESTAMP, nullable=False),
     Column("updated_at", TIMESTAMP, nullable=False),
 )

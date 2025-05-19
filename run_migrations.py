@@ -1,11 +1,11 @@
 import os
-import sys
-from pathlib import Path
+import asyncio
+import logging
+from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import inspect
 
-# Set the correct database URL for migrations
-os.environ["DATABASE_URL"] = "postgresql://postgres:postgres@localhost:2345/btaa_ogm_api"
-
-# Import and run each migration
+from db.config import DATABASE_URL
 from db.migrations.create_gazetteer_tables import create_gazetteer_tables
 from db.migrations.create_item_relationships import create_relationships_table
 from db.migrations.create_fast_embeddings import create_fast_embeddings_table
@@ -15,38 +15,69 @@ from db.migrations.add_fast_gazetteer import add_fast_gazetteer
 from db.migrations.update_fast_gazetteer import update_fast_gazetteer
 from db.migrations.rename_ai_enrichments import rename_ai_enrichments_table
 from db.migrations.rename_document_id_to_item_id import rename_document_id_to_item_id
+from db.migrations.create_item_allmaps_table import create_item_allmaps_table
 
-def run_migrations():
-    print("Running database migrations...")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+async def run_migrations():
+    """Run all database migrations."""
+    logger.info("Running database migrations...")
     
-    print("\nCreating gazetteer tables...")
-    create_gazetteer_tables()
+    # Create async engine
+    engine = create_async_engine(DATABASE_URL)
     
-    print("\nCreating item relationships table...")
-    create_relationships_table()
-    
-    print("\nCreating FAST embeddings table...")
-    create_fast_embeddings_table()
-    
-    print("\nCreating AI enrichments table...")
-    create_ai_enrichments_table()
-    
-    print("\nAdding enrichment type column...")
-    add_enrichment_type_column()
-    
-    print("\nAdding FAST gazetteer...")
-    add_fast_gazetteer()
-    
-    print("\nUpdating FAST gazetteer...")
-    update_fast_gazetteer()
-    
-    print("\nRenaming AI enrichments table...")
-    rename_ai_enrichments_table()
-    
-    print("\nRenaming document_id to item_id in item_ai_enrichments table...")
-    rename_document_id_to_item_id()
-    
-    print("\nAll migrations completed successfully!")
+    try:
+        # Create gazetteer tables
+        logger.info("Creating gazetteer tables...")
+        await create_gazetteer_tables(engine)
+        
+        # Create item relationships table
+        logger.info("Creating item relationships table...")
+        await create_relationships_table(engine)
+        
+        # Create FAST embeddings table
+        logger.info("Creating FAST embeddings table...")
+        await create_fast_embeddings_table(engine)
+        
+        # Create AI enrichments table
+        logger.info("Creating AI enrichments table...")
+        await create_ai_enrichments_table(engine)
+        
+        # Add enrichment type column
+        logger.info("Adding enrichment type column...")
+        await add_enrichment_type_column(engine)
+        
+        # Add FAST gazetteer
+        logger.info("Adding FAST gazetteer...")
+        await add_fast_gazetteer(engine)
+        
+        # Update FAST gazetteer
+        logger.info("Updating FAST gazetteer...")
+        await update_fast_gazetteer(engine)
+        
+        # Rename AI enrichments table
+        logger.info("Renaming AI enrichments table...")
+        await rename_ai_enrichments_table(engine)
+        
+        # Rename document_id to item_id in item_ai_enrichments table
+        logger.info("Renaming document_id to item_id in item_ai_enrichments table...")
+        await rename_document_id_to_item_id(engine)
+        
+        # Create item_allmaps table
+        logger.info("Creating item_allmaps table...")
+        await create_item_allmaps_table(engine)
+        
+    except Exception as e:
+        logger.error(f"Error running migrations: {str(e)}")
+        raise
+    finally:
+        await engine.dispose()
 
 if __name__ == "__main__":
-    run_migrations() 
+    # Load environment variables
+    load_dotenv()
+    
+    # Run migrations
+    asyncio.run(run_migrations()) 
