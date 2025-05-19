@@ -1,11 +1,9 @@
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.config import DATABASE_URL
 from db.models import item_allmaps
 
 logger = logging.getLogger(__name__)
@@ -26,10 +24,10 @@ class AllmapsService:
 
     async def get_allmaps_attributes(self, session: AsyncSession) -> Dict:
         """Get Allmaps attributes for the item.
-        
+
         Args:
             session: SQLAlchemy async database session
-            
+
         Returns:
             Dict containing Allmaps attributes if found, empty dict otherwise
         """
@@ -41,10 +39,10 @@ class AllmapsService:
             # Query the item_allmaps table
             query = select(item_allmaps).where(item_allmaps.c.item_id == self.item_id)
             logger.info(f"Executing query for item {self.item_id}: {query}")
-            
+
             result = await session.execute(query)
             row = result.fetchone()
-            
+
             if not row:
                 logger.info(f"No Allmaps data found for item {self.item_id}")
                 return {}
@@ -52,7 +50,7 @@ class AllmapsService:
             # Convert to dict and extract relevant fields
             allmaps_dict = dict(row._mapping)
             logger.info(f"Found Allmaps data for item {self.item_id}: {allmaps_dict}")
-            
+
             attributes = {
                 "ui_allmaps_id": allmaps_dict.get("allmaps_id"),
                 "ui_allmaps_annotated": allmaps_dict.get("annotated"),
@@ -62,5 +60,7 @@ class AllmapsService:
             return attributes
 
         except Exception as e:
-            logger.error(f"Error getting Allmaps attributes for item {self.item_id}: {e}", exc_info=True)
-            return {} 
+            logger.error(
+                f"Error getting Allmaps attributes for item {self.item_id}: {e}", exc_info=True
+            )
+            return {}
