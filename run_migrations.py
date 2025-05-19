@@ -15,6 +15,7 @@ from db.migrations.add_fast_gazetteer import add_fast_gazetteer
 from db.migrations.update_fast_gazetteer import update_fast_gazetteer
 from db.migrations.rename_ai_enrichments import rename_ai_enrichments_table
 from db.migrations.rename_document_id_to_item_id import rename_document_id_to_item_id
+from db.migrations.create_item_allmaps_table import create_item_allmaps_table
 
 def run_migrations():
     print("Running database migrations...")
@@ -45,6 +46,9 @@ def run_migrations():
     
     print("\nRenaming document_id to item_id in item_ai_enrichments table...")
     rename_document_id_to_item_id()
+    
+    print("\nCreating item_allmaps table...")
+    create_item_allmaps_table()
     
     print("\nAll migrations completed successfully!")
 

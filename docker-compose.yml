@@ -6,7 +6,7 @@ services:
     image: ewlarson/btaa-ogm-api:0.1.1
     container_name: btaa-ogm-api-app
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/btaa_ogm_api
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@paradedb:5432/btaa_ogm_api
       - ELASTICSEARCH_URL=http://elasticsearch:9200
       - ELASTICSEARCH_INDEX=btaa_ogm_api
       - LOG_PATH=/app/logs
@@ -20,6 +20,7 @@ services:
       - GAZETTEER_CACHE_TTL=3600  # 1 hour in seconds
       - ADMIN_USERNAME=admin
       - ADMIN_PASSWORD=changeme
+      - IS_DOCKER=true
     ports:
       - "8000:8000"
     depends_on:
@@ -101,7 +102,7 @@ services:
     container_name: btaa-ogm-api-celery
     command: celery -A app.tasks.worker worker --loglevel=INFO
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/btaa_ogm_api
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@paradedb:5432/btaa_ogm_api
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_TTL=604800
@@ -127,7 +128,7 @@ services:
     ports:
       - "5555:5555"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@paradedb:5432/btaa_ogm_api
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@paradedb:5432/btaa_ogm_api
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_TTL=604800

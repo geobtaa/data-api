@@ -5,6 +5,8 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
 
 from app.api.v1.utils import (
     add_thumbnail_url,
@@ -18,7 +20,8 @@ from app.services.download_service import DownloadService
 from app.services.image_service import ImageService
 from app.services.search_service import SearchService
 from app.services.viewer_service import ViewerService
-from db.database import database
+from app.services.allmaps_service import AllmapsService
+from db.config import DATABASE_URL
 from db.models import items
 
 # Load environment variables from .env file
@@ -27,6 +30,12 @@ load_dotenv()
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+# Create async engine and session
+engine = create_async_engine(DATABASE_URL)
+async_session = sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False
+)
 
 base_url = os.getenv("APPLICATION_URL", "http://localhost:8000/api/v1/")
 
@@ -61,13 +70,23 @@ async def get_item(
     """Get a single item by ID."""
     try:
         search_service = SearchService()
-        item = await search_service.get_item(id)
-        if not item:
+        response = await search_service.get_item(id)
+        if not response:
             return JSONResponse(content={"error": "Item not found"}, status_code=404)
 
         # Sanitize the item data for JSON serialization
-        item = sanitize_for_json(item)
-        return create_response(item, callback)
+        response = sanitize_for_json(response)
+        
+        # Add Allmaps data
+        logger.info(f"Processing item data: {response}")
+        async with async_session() as session:
+            allmaps_service = AllmapsService({"id": id, "attributes": response["data"]["attributes"]})
+            allmaps_attributes = await allmaps_service.get_allmaps_attributes(session)
+            logger.info(f"Got Allmaps attributes: {allmaps_attributes}")
+            # Update the attributes dictionary
+            response["data"]["attributes"].update(allmaps_attributes)
+        
+        return create_response(response, callback)
     except HTTPException:
         # Re-raise HTTP exceptions to maintain their status code
         raise
@@ -99,6 +118,10 @@ async def list_items(
         # Use DownloadService to get download options
         download_service = DownloadService(item_dict)
         ui_downloads = download_service.get_download_options()
+        
+        # Get Allmaps attributes
+        allmaps_service = AllmapsService(item_dict)
+        allmaps_attributes = await allmaps_service.get_allmaps_attributes(database)
 
         processed_items.append(
             {
@@ -107,6 +130,7 @@ async def list_items(
                 "attributes": {
                     **item_dict,
                     **viewer_attributes,
+                    **allmaps_attributes,
                     "ui_citation": item_dict.get("ui_citation"),
                     "ui_thumbnail_url": item_dict.get("ui_thumbnail_url"),
                     "ui_viewer_endpoint": viewer_attributes.get("ui_viewer_endpoint"),
