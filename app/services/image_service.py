@@ -8,6 +8,7 @@ import aiohttp
 import redis
 import requests
 from dotenv import load_dotenv
+import hashlib
 
 # Load environment variables from .env file
 load_dotenv()
@@ -176,12 +177,16 @@ class ImageService:
 
     def get_thumbnail_url(self) -> Optional[str]:
         """
-        Get the thumbnail URL from document metadata.
+        Get the thumbnail URL from document metadata with caching support.
 
         Returns:
             Thumbnail URL if available, None otherwise
         """
         try:
+            doc_id = self.metadata.get('id')
+            if not doc_id:
+                return None
+
             # Parse references if needed
             references = self.metadata.get("dct_references_s", {})
             if isinstance(references, str):
@@ -191,18 +196,89 @@ class ImageService:
                     logger.error("Failed to parse references JSON")
                     return None
 
-            # Look for IIIF thumbnail URL
-            if "http://iiif.io/api/image" in references:
-                iiif_url = references["http://iiif.io/api/image"]
-                if isinstance(iiif_url, list) and iiif_url:
-                    iiif_url = iiif_url[0]
-                return f"{iiif_url}/full/200,/0/default.jpg"
+            if not isinstance(references, dict):
+                return None
 
-            # Look for direct thumbnail URL
+            thumbnail_url = None
+
+            # Check for direct thumbnail URL first
             if "http://schema.org/thumbnailUrl" in references:
                 thumbnail_url = references["http://schema.org/thumbnailUrl"]
                 if isinstance(thumbnail_url, list) and thumbnail_url:
-                    return thumbnail_url[0]
+                    thumbnail_url = thumbnail_url[0]
+
+            # Check for IIIF thumbnail URL
+            elif "http://iiif.io/api/image" in references:
+                iiif_url = references["http://iiif.io/api/image"]
+                if isinstance(iiif_url, list) and iiif_url:
+                    iiif_url = iiif_url[0]
+                
+                # Transform ContentDM IIIF URLs
+                if "contentdm.oclc.org" in iiif_url:
+                    # Extract collection and item ID from the URL
+                    match = re.search(r'/digital/iiif/([^/]+)/(\d+)', iiif_url)
+                    if match:
+                        collection, item_id = match.groups()
+                        # Construct the correct IIIF URL format
+                        thumbnail_url = f"https://cdm16022.contentdm.oclc.org/iiif/2/{collection}:{item_id}/full/200,/0/default.jpg"
+                
+                # For non-ContentDM IIIF URLs, use standard format
+                if not thumbnail_url:
+                    thumbnail_url = f"{iiif_url}/full/200,/0/default.jpg"
+
+            # Check for IIIF Manifest
+            elif (
+                "https://iiif.io/api/presentation/2/context.json" in references
+                or "http://iiif.io/api/presentation#manifest" in references
+            ):
+                manifest_url = references.get(
+                    "https://iiif.io/api/presentation/2/context.json"
+                ) or references.get("http://iiif.io/api/presentation#manifest")
+                thumbnail_url = self.get_iiif_manifest_thumbnail(manifest_url)
+
+            # Check for ESRI services
+            elif "urn:x-esri:serviceType:ArcGIS#ImageMapLayer" in references:
+                viewer_endpoint = references["urn:x-esri:serviceType:ArcGIS#ImageMapLayer"]
+                thumbnail_url = f"{viewer_endpoint}/info/thumbnail/thumbnail.png"
+            elif "urn:x-esri:serviceType:ArcGIS#TiledMapLayer" in references:
+                viewer_endpoint = references["urn:x-esri:serviceType:ArcGIS#TiledMapLayer"]
+                thumbnail_url = f"{viewer_endpoint}/info/thumbnail/thumbnail.png"
+            elif "urn:x-esri:serviceType:ArcGIS#DynamicMapLayer" in references:
+                viewer_endpoint = references["urn:x-esri:serviceType:ArcGIS#DynamicMapLayer"]
+                thumbnail_url = f"{viewer_endpoint}/info/thumbnail/thumbnail.png"
+            
+            # Check for WMS
+            elif "http://www.opengis.net/def/serviceType/ogc/wms" in references:
+                wms_endpoint = references["http://www.opengis.net/def/serviceType/ogc/wms"]
+                width = 200
+                height = 200
+                layers = self.metadata.get("gbl_wxsidentifier_s", "")
+                thumbnail_url = (f"{wms_endpoint}/reflect?"
+                       f"FORMAT=image/png&"
+                       f"TRANSPARENT=TRUE&"
+                       f"WIDTH={width}&"
+                       f"HEIGHT={height}&"
+                       f"LAYERS={layers}")
+            
+            # Check for TMS
+            elif "http://www.opengis.net/def/serviceType/ogc/tms" in references:
+                tms_endpoint = references["http://www.opengis.net/def/serviceType/ogc/tms"]
+                thumbnail_url = f"{tms_endpoint}/reflect?format=application/vnd.google-earth.kml+xml"
+
+            if thumbnail_url:
+                # Check if we have the image cached
+                image_hash = hashlib.sha256(thumbnail_url.encode()).hexdigest()
+                image_key = f"image:{image_hash}"
+                
+                if self.image_cache.exists(image_key):
+                    self.logger.info(f"🚀 Cache HIT for image {doc_id}")
+                    return f"{self.application_url}/api/v1/thumbnails/{image_hash}"
+                
+                # If not cached, queue for background processing and return original URL
+                self.logger.info(f"🐌 Queueing image fetch for {doc_id}: {thumbnail_url}")
+                from app.tasks.worker import fetch_and_cache_image
+                task = fetch_and_cache_image.delay(thumbnail_url)
+                self.logger.info(f"Task ID: {task.id}")
                 return thumbnail_url
 
             return None
