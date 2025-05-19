@@ -190,6 +190,11 @@ class ImageService:
             Thumbnail URL if available, None otherwise
         """
         try:
+            # Check for restricted access rights
+            if self.metadata.get("dct_accessrights_s") == "Restricted":
+                self.logger.info("Skipping thumbnail for restricted item")
+                return None
+
             doc_id = self.metadata.get("id")
             if not doc_id:
                 return None
