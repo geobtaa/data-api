@@ -95,6 +95,13 @@ class ImageService:
             return manifest_url
 
         try:
+            # Check for Stanford-style thumbnail array
+            if isinstance(manifest_json.get("thumbnail"), list) and manifest_json["thumbnail"]:
+                self.logger.debug("Image: Stanford-style thumbnail array")
+                thumbnail = manifest_json["thumbnail"][0]
+                if isinstance(thumbnail, dict) and thumbnail.get("id"):
+                    return thumbnail["id"]
+
             # Sequences - Return the first image if it exists
             if manifest_json.get("sequences"):
                 self.logger.debug("Image: sequences")
