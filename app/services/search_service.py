@@ -187,7 +187,7 @@ class SearchService:
             if include_summaries:
                 try:
                     summaries_query = """
-                        SELECT * FROM ai_enrichments 
+                        SELECT * FROM item_ai_enrichments 
                         WHERE item_id = :item_id 
                         ORDER BY created_at DESC
                     """
