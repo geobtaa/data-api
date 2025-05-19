@@ -8,7 +8,36 @@ The `scripts/` directory contains various utility scripts for managing the appli
 
 ## Available Scripts
 
-### 1. `populate_relationships.py`
+### 1. `process_allmaps.py`
+
+**Purpose**: Processes and generates Allmaps annotations for items in the database.
+
+**Key Features**:
+- Processes individual items or all items in the database
+- Generates Allmaps IDs and annotations
+- Updates item records with Allmaps attributes
+- Supports reprocessing of existing items
+- Implements logging and error handling
+
+**Usage**:
+```bash
+# Process a specific item
+python process_allmaps.py --item-id "9139578d-7803-4f4f-9ed3-a62ab810a256"
+
+# Process all items
+python process_allmaps.py --all
+```
+
+**Requirements**:
+- Database connection must be properly configured
+- Item must have a valid manifest URL
+- Item must not already have Allmaps attributes (unless reprocessing)
+
+**Output**:
+- Updates the `item_allmaps` table with generated Allmaps data
+- Logs processing status and any errors encountered
+
+### 2. `populate_relationships.py`
 
 **Purpose**: Manages and populates relationship data between documents in the database.
 
@@ -23,7 +52,7 @@ The `scripts/` directory contains various utility scripts for managing the appli
 python scripts/populate_relationships.py
 ```
 
-### 2. `generate_fast_embeddings.py`
+### 3. `generate_fast_embeddings.py`
 
 **Purpose**: Generates and stores embeddings for FAST gazetteer data using OpenAI's API.
 
@@ -41,7 +70,7 @@ python scripts/populate_relationships.py
 python scripts/generate_fast_embeddings.py
 ```
 
-### 3. `run_migration.py`
+### 4. `run_migration.py`
 
 **Purpose**: Executes database migrations.
 
@@ -58,7 +87,7 @@ python scripts/generate_fast_embeddings.py
 python scripts/run_migration.py add_fast_gazetteer
 ```
 
-### 4. `import_fast.py`
+### 5. `import_fast.py`
 
 **Purpose**: Imports OCLC FAST Dataset Geographic entries into the database.
 
@@ -73,7 +102,7 @@ python scripts/run_migration.py add_fast_gazetteer
 python scripts/import_fast.py
 ```
 
-### 5. `clear_cache.py`
+### 6. `clear_cache.py`
 
 **Purpose**: Clears the Redis cache used by the application.
 
@@ -88,7 +117,7 @@ python scripts/import_fast.py
 python scripts/clear_cache.py
 ```
 
-### 6. `test_gazetteer_api.py`
+### 7. `test_gazetteer_api.py`
 
 **Purpose**: Tests the functionality of gazetteer API endpoints.
 
