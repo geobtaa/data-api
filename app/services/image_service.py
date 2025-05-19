@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import os
@@ -8,7 +9,6 @@ import aiohttp
 import redis
 import requests
 from dotenv import load_dotenv
-import hashlib
 
 # Load environment variables from .env file
 load_dotenv()
@@ -190,7 +190,7 @@ class ImageService:
             Thumbnail URL if available, None otherwise
         """
         try:
-            doc_id = self.metadata.get('id')
+            doc_id = self.metadata.get("id")
             if not doc_id:
                 return None
 
@@ -219,16 +219,16 @@ class ImageService:
                 iiif_url = references["http://iiif.io/api/image"]
                 if isinstance(iiif_url, list) and iiif_url:
                     iiif_url = iiif_url[0]
-                
+
                 # Transform ContentDM IIIF URLs
                 if "contentdm.oclc.org" in iiif_url:
                     # Extract collection and item ID from the URL
-                    match = re.search(r'/digital/iiif/([^/]+)/(\d+)', iiif_url)
+                    match = re.search(r"/digital/iiif/([^/]+)/(\d+)", iiif_url)
                     if match:
                         collection, item_id = match.groups()
                         # Construct the correct IIIF URL format
                         thumbnail_url = f"https://cdm16022.contentdm.oclc.org/iiif/2/{collection}:{item_id}/full/200,/0/default.jpg"
-                
+
                 # For non-ContentDM IIIF URLs, use standard format
                 if not thumbnail_url:
                     thumbnail_url = f"{iiif_url}/full/200,/0/default.jpg"
@@ -253,37 +253,42 @@ class ImageService:
             elif "urn:x-esri:serviceType:ArcGIS#DynamicMapLayer" in references:
                 viewer_endpoint = references["urn:x-esri:serviceType:ArcGIS#DynamicMapLayer"]
                 thumbnail_url = f"{viewer_endpoint}/info/thumbnail/thumbnail.png"
-            
+
             # Check for WMS
             elif "http://www.opengis.net/def/serviceType/ogc/wms" in references:
                 wms_endpoint = references["http://www.opengis.net/def/serviceType/ogc/wms"]
                 width = 200
                 height = 200
                 layers = self.metadata.get("gbl_wxsidentifier_s", "")
-                thumbnail_url = (f"{wms_endpoint}/reflect?"
-                       f"FORMAT=image/png&"
-                       f"TRANSPARENT=TRUE&"
-                       f"WIDTH={width}&"
-                       f"HEIGHT={height}&"
-                       f"LAYERS={layers}")
-            
+                thumbnail_url = (
+                    f"{wms_endpoint}/reflect?"
+                    f"FORMAT=image/png&"
+                    f"TRANSPARENT=TRUE&"
+                    f"WIDTH={width}&"
+                    f"HEIGHT={height}&"
+                    f"LAYERS={layers}"
+                )
+
             # Check for TMS
             elif "http://www.opengis.net/def/serviceType/ogc/tms" in references:
                 tms_endpoint = references["http://www.opengis.net/def/serviceType/ogc/tms"]
-                thumbnail_url = f"{tms_endpoint}/reflect?format=application/vnd.google-earth.kml+xml"
+                thumbnail_url = (
+                    f"{tms_endpoint}/reflect?format=application/vnd.google-earth.kml+xml"
+                )
 
             if thumbnail_url:
                 # Check if we have the image cached
                 image_hash = hashlib.sha256(thumbnail_url.encode()).hexdigest()
                 image_key = f"image:{image_hash}"
-                
+
                 if self.image_cache.exists(image_key):
                     self.logger.info(f"🚀 Cache HIT for image {doc_id}")
                     return f"{self.application_url}/api/v1/thumbnails/{image_hash}"
-                
+
                 # If not cached, queue for background processing and return original URL
                 self.logger.info(f"🐌 Queueing image fetch for {doc_id}: {thumbnail_url}")
                 from app.tasks.worker import fetch_and_cache_image
+
                 task = fetch_and_cache_image.delay(thumbnail_url)
                 self.logger.info(f"Task ID: {task.id}")
                 return thumbnail_url
