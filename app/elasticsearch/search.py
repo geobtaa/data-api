@@ -48,103 +48,97 @@ async def search_items(
 
         # Construct the filter query
         filter_clauses = []
+        must_clauses = []
         if fq:
-            for field, values in fq.items():
-                logger.debug(f"Processing filter - Field: {field}, Values: {values}")
-                if isinstance(values, list):
-                    filter_clauses.append({"terms": {field: values}})
-                else:
-                    filter_clauses.append({"term": {field: values}})
+            # If fq is a bool query (for bbox), use its must clauses directly
+            if isinstance(fq, dict) and "bool" in fq:
+                logger.info(f"Found bool query in fq: {json.dumps(fq, indent=2)}")
+                must_clauses.extend(fq["bool"]["must"])
+                logger.info(f"Must clauses after extending: {json.dumps(must_clauses, indent=2)}")
+            else:
+                # Handle regular filters
+                for field, values in fq.items():
+                    logger.debug(f"Processing filter - Field: {field}, Values: {values}")
+                    if isinstance(values, list):
+                        filter_clauses.append({"terms": {field: values}})
+                    else:
+                        filter_clauses.append({"term": {field: values}})
 
         # Build the search query
         if search_criteria.get("query"):
             # Create a multi-match query that searches across multiple fields
-            search_query = {
-                "query": {
-                    "bool": {
-                        "must": [
-                            {
-                                "multi_match": {
-                                    "query": search_criteria["query"],
-                                    "fields": [
-                                        "dct_title_s^3",  # Boost title matches
-                                        "dct_description_sm^2",  # Boost description matches
-                                        "summary^2",  # Add summary field with boost
-                                        "dct_creator_sm^2",  # Boost creator name matches
-                                        "dct_subject_sm^1.5",  # Boost subject matches
-                                        "dcat_keyword_sm^1.5",  # Boost keyword matches
-                                        "dct_publisher_sm",  # Include publisher name
-                                        "schema_provider_s",  # Include provider name
-                                        "dct_spatial_sm",  # Include spatial name
-                                        "gbl_displaynote_sm",  # Include display notes
-                                    ],
-                                    "type": "best_fields",
-                                    "operator": "and",
-                                }
-                            }
-                        ],
-                        "filter": filter_clauses,
-                    }
-                },
-                "from": skip,
-                "size": limit,
-                "sort": sort or [{"_score": "desc"}],
-                "track_total_hits": True,
-                "aggs": {
-                    "id_agg": {"terms": {"field": "id"}},
-                    "spatial_agg": {"terms": {"field": "dct_spatial_sm"}},
-                    "resource_class_agg": {"terms": {"field": "gbl_resourceclass_sm"}},
-                    "resource_type_agg": {"terms": {"field": "gbl_resourcetype_sm"}},
-                    "index_year_agg": {"terms": {"field": "gbl_indexyear_im"}},
-                    "language_agg": {"terms": {"field": "dct_language_sm"}},
-                    "creator_agg": {"terms": {"field": "dct_creator_sm"}},
-                    "provider_agg": {"terms": {"field": "schema_provider_s"}},
-                    "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
-                    "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
-                },
-            }
+            must_clauses.append({
+                "multi_match": {
+                    "query": search_criteria["query"],
+                    "fields": [
+                        "dct_title_s^3",  # Boost title matches
+                        "dct_description_sm^2",  # Boost description matches
+                        "summary^2",  # Add summary field with boost
+                        "dct_creator_sm^2",  # Boost creator name matches
+                        "dct_subject_sm^1.5",  # Boost subject matches
+                        "dcat_keyword_sm^1.5",  # Boost keyword matches
+                        "dct_publisher_sm",  # Include publisher name
+                        "schema_provider_s",  # Include provider name
+                        "dct_spatial_sm",  # Include spatial name
+                        "gbl_displaynote_sm",  # Include display notes
+                    ],
+                    "type": "best_fields",
+                    "operator": "and",
+                }
+            })
+        elif not must_clauses:  # Only add match_all if there are no must clauses
+            must_clauses.append({"match_all": {}})
 
-            # Only add suggest if query is not empty
-            if search_criteria["query"].strip():
-                search_query["suggest"] = {
-                    "text": search_criteria["query"],
-                    "simple_phrase": {
-                        "phrase": {
-                            "field": "dct_title_s",
-                            "size": 1,
-                            "gram_size": 3,
-                            "direct_generator": [
-                                {"field": "dct_title_s", "suggest_mode": "always"},
-                                {"field": "dct_description_sm", "suggest_mode": "always"},
-                            ],
-                            "highlight": {"pre_tag": "<em>", "post_tag": "</em>"},
-                        }
+        search_query = {
+            "query": {
+                "bool": {
+                    "must": must_clauses,
+                    "filter": filter_clauses,
+                }
+            },
+            "from": skip,
+            "size": limit,
+            "sort": sort or [{"_score": "desc"}],
+            "track_total_hits": True,
+            "aggs": {
+                "id_agg": {"terms": {"field": "id"}},
+                "spatial_agg": {"terms": {"field": "dct_spatial_sm"}},
+                "resource_class_agg": {"terms": {"field": "gbl_resourceclass_sm"}},
+                "resource_type_agg": {"terms": {"field": "gbl_resourcetype_sm"}},
+                "index_year_agg": {"terms": {"field": "gbl_indexyear_im"}},
+                "language_agg": {"terms": {"field": "dct_language_sm"}},
+                "creator_agg": {"terms": {"field": "dct_creator_sm"}},
+                "provider_agg": {"terms": {"field": "schema_provider_s"}},
+                "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
+                "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
+            },
+        }
+
+        logger.info(f"Final search query: {json.dumps(search_query, indent=2)}")
+
+        # Only add suggest if query is not empty
+        if search_criteria.get("query"):  # This will safely handle None
+            search_query["suggest"] = {
+                "text": search_criteria["query"],
+                "simple_phrase": {
+                    "phrase": {
+                        "field": "dct_title_s",
+                        "size": 1,
+                        "gram_size": 3,
+                        "direct_generator": [
+                            {"field": "dct_title_s", "suggest_mode": "always"},
+                            {"field": "dct_description_sm", "suggest_mode": "always"},
+                        ],
+                        "highlight": {"pre_tag": "<em>", "post_tag": "</em>"},
                     },
                 }
-        else:
-            search_query = {
-                "query": {"bool": {"must": [{"match_all": {}}], "filter": filter_clauses}},
-                "from": skip,
-                "size": limit,
-                "sort": sort or [{"_score": "desc"}],
-                "track_total_hits": True,
-                "aggs": {
-                    "id_agg": {"terms": {"field": "id"}},
-                    "spatial_agg": {"terms": {"field": "dct_spatial_sm"}},
-                    "resource_class_agg": {"terms": {"field": "gbl_resourceclass_sm"}},
-                    "resource_type_agg": {"terms": {"field": "gbl_resourcetype_sm"}},
-                    "index_year_agg": {"terms": {"field": "gbl_indexyear_im"}},
-                    "language_agg": {"terms": {"field": "dct_language_sm"}},
-                    "creator_agg": {"terms": {"field": "dct_creator_sm"}},
-                    "provider_agg": {"terms": {"field": "schema_provider_s"}},
-                    "access_rights_agg": {"terms": {"field": "dct_accessrights_sm"}},
-                    "georeferenced_agg": {"terms": {"field": "gbl_georeferenced_b"}},
-                },
             }
 
         logger.debug(f"ES Query: {json.dumps(search_query, indent=2)}")
 
         try:
+            logger.info("Executing Elasticsearch query...")
+            logger.info(f"Query being sent to Elasticsearch: {json.dumps(search_query['query'], indent=2)}")
             response = await es.search(
                 index=index_name,
                 query=search_query["query"],
@@ -155,6 +149,7 @@ async def search_items(
                 aggs=search_query["aggs"],
                 suggest=search_query.get("suggest"),  # Only include suggest if it exists
             )
+            logger.info(f"ES Response: {json.dumps(response.body, indent=2)}")
         except Exception as es_error:
             logger.error(f"Elasticsearch error: {str(es_error)}", exc_info=True)
             error_detail = {

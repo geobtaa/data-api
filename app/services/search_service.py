@@ -30,6 +30,7 @@ class SearchService:
     async def search(
         self,
         q: Optional[str],
+        bbox: Optional[str] = None,
         page: int = 1,
         limit: int = 10,
         sort: Optional[str] = None,
@@ -49,8 +50,82 @@ class SearchService:
                 self.extract_filter_queries(request_query_params) if request_query_params else {}
             )
 
+            # Add bbox filter if provided
+            if bbox:
+                try:
+                    # Parse bbox string into coordinates
+                    min_lon, min_lat, max_lon, max_lat = map(float, bbox.split())
+                    logger.info(f"Parsed bbox coordinates: min_lon={min_lon}, min_lat={min_lat}, max_lon={max_lon}, max_lat={max_lat}")
+
+                    # Build a geo_shape Polygon filter for dcat_bbox
+                    polygon = [
+                        [min_lon, min_lat],
+                        [max_lon, min_lat],
+                        [max_lon, max_lat],
+                        [min_lon, max_lat],
+                        [min_lon, min_lat],  # close the polygon
+                    ]
+                    
+                    # Create the bbox filter
+                    bbox_filter = {
+                        "geo_shape": {
+                            "dcat_bbox": {
+                                "shape": {
+                                    "type": "Polygon",
+                                    "coordinates": [polygon],
+                                },
+                                "relation": "intersects"
+                            }
+                        }
+                    }
+                    
+                    # Convert regular filters to bool query if needed
+                    if filter_query and not isinstance(filter_query, dict):
+                        filter_query = {
+                            "bool": {
+                                "must": [
+                                    {"terms": {k: v}} if isinstance(v, list) else {"term": {k: v}}
+                                    for k, v in filter_query.items()
+                                ]
+                            }
+                        }
+                    elif filter_query and not isinstance(filter_query.get("bool"), dict):
+                        filter_query = {
+                            "bool": {
+                                "must": [
+                                    {"terms": {k: v}} if isinstance(v, list) else {"term": {k: v}}
+                                    for k, v in filter_query.items()
+                                ]
+                            }
+                        }
+                    
+                    # If we already have a bool query, add to its must clauses
+                    if isinstance(filter_query, dict) and "bool" in filter_query:
+                        if "must" in filter_query["bool"]:
+                            filter_query["bool"]["must"].append(bbox_filter)
+                        else:
+                            filter_query["bool"]["must"] = [bbox_filter]
+                    else:
+                        # Create a new bool query with the bbox filter
+                        filter_query = {
+                            "bool": {
+                                "must": [bbox_filter]
+                            }
+                        }
+                    
+                    logger.info(f"Created combined filter query: {json.dumps(filter_query, indent=2)}")
+                except (ValueError, IndexError) as e:
+                    logger.error(f"Invalid bbox format: {bbox}")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Invalid bbox format. Expected format: min_lon min_lat max_lon max_lat"
+                    ) from e
+
             # Get sort mapping
             sort_mapping = SORT_MAPPINGS.get(sort, None)
+
+            # Log the filter query for debugging
+            logger.info(f"Filter query before search: {json.dumps(filter_query, indent=2)}")
 
             # Elasticsearch query
             es_start = time.time()
@@ -127,6 +202,7 @@ class SearchService:
                 "message": "Search operation failed",
                 "error": str(e),
                 "query": q,
+                "bbox": bbox,
                 "filters": filter_query if "filter_query" in locals() else None,
                 "sort": sort,
             }

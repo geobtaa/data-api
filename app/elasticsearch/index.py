@@ -59,7 +59,7 @@ async def process_item(item_dict):
             except json.JSONDecodeError:
                 processed_dict[key] = value
         # Handle geometry fields
-        elif key in ["locn_geometry", "dcat_bbox", "dcat_centroid"]:
+        elif key in ["locn_geometry", "dcat_bbox"]:
             # Store original string value
             processed_dict[f"{key}_original"] = value
             # Convert to GeoJSON for Elasticsearch
@@ -95,6 +95,53 @@ async def process_item(item_dict):
                                 # Ensure type is capitalized
                                 geom["type"] = geom["type"].capitalize()
                                 processed_dict[key] = geom
+                            else:
+                                processed_dict[key] = None
+                        except json.JSONDecodeError:
+                            processed_dict[key] = None
+                except Exception:
+                    processed_dict[key] = None
+            else:
+                processed_dict[key] = None
+        elif key == "dcat_centroid":
+            # Store original string value
+            processed_dict[f"{key}_original"] = value
+            # Convert to geo_point for Elasticsearch
+            if value:
+                try:
+                    # Check if it's an ENVELOPE format (case insensitive)
+                    envelope_match = re.match(
+                        r"ENVELOPE\(([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\)",
+                        value,
+                        re.IGNORECASE,
+                    )
+                    if envelope_match:
+                        # Extract coordinates from ENVELOPE(minx,maxx,maxy,miny)
+                        minx, maxx, maxy, miny = map(float, envelope_match.groups())
+                        # Calculate center point
+                        center_lon = (minx + maxx) / 2
+                        center_lat = (miny + maxy) / 2
+                        processed_dict[key] = {
+                            "lat": center_lat,
+                            "lon": center_lon
+                        }
+                    else:
+                        # Try to parse as JSON if it's not an ENVELOPE
+                        try:
+                            geom = json.loads(value)
+                            if isinstance(geom, dict) and "type" in geom:
+                                if geom["type"].lower() == "point":
+                                    # Extract coordinates from GeoJSON point
+                                    coords = geom.get("coordinates", [])
+                                    if len(coords) >= 2:
+                                        processed_dict[key] = {
+                                            "lat": coords[1],
+                                            "lon": coords[0]
+                                        }
+                                    else:
+                                        processed_dict[key] = None
+                                else:
+                                    processed_dict[key] = None
                             else:
                                 processed_dict[key] = None
                         except json.JSONDecodeError:
