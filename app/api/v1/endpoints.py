@@ -177,7 +177,9 @@ async def list_items(
 async def search(
     request: Request,
     q: Optional[str] = Query(None, description="Search query"),
-    bbox: Optional[str] = Query(None, description="Bounding box in format 'min_lon min_lat max_lon max_lat'"),
+    bbox: Optional[str] = Query(
+        None, description="Bounding box in format 'min_lon min_lat max_lon max_lat'"
+    ),
     page: int = Query(1, description="Page number"),
     per_page: int = Query(10, description="Items per page"),
     sort: Optional[str] = Query(

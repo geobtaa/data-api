@@ -67,25 +67,27 @@ async def search_items(
         # Build the search query
         if search_criteria.get("query"):
             # Create a multi-match query that searches across multiple fields
-            must_clauses.append({
-                "multi_match": {
-                    "query": search_criteria["query"],
-                    "fields": [
-                        "dct_title_s^3",  # Boost title matches
-                        "dct_description_sm^2",  # Boost description matches
-                        "summary^2",  # Add summary field with boost
-                        "dct_creator_sm^2",  # Boost creator name matches
-                        "dct_subject_sm^1.5",  # Boost subject matches
-                        "dcat_keyword_sm^1.5",  # Boost keyword matches
-                        "dct_publisher_sm",  # Include publisher name
-                        "schema_provider_s",  # Include provider name
-                        "dct_spatial_sm",  # Include spatial name
-                        "gbl_displaynote_sm",  # Include display notes
-                    ],
-                    "type": "best_fields",
-                    "operator": "and",
+            must_clauses.append(
+                {
+                    "multi_match": {
+                        "query": search_criteria["query"],
+                        "fields": [
+                            "dct_title_s^3",  # Boost title matches
+                            "dct_description_sm^2",  # Boost description matches
+                            "summary^2",  # Add summary field with boost
+                            "dct_creator_sm^2",  # Boost creator name matches
+                            "dct_subject_sm^1.5",  # Boost subject matches
+                            "dcat_keyword_sm^1.5",  # Boost keyword matches
+                            "dct_publisher_sm",  # Include publisher name
+                            "schema_provider_s",  # Include provider name
+                            "dct_spatial_sm",  # Include spatial name
+                            "gbl_displaynote_sm",  # Include display notes
+                        ],
+                        "type": "best_fields",
+                        "operator": "and",
+                    }
                 }
-            })
+            )
         elif not must_clauses:  # Only add match_all if there are no must clauses
             must_clauses.append({"match_all": {}})
 
@@ -131,14 +133,16 @@ async def search_items(
                         ],
                         "highlight": {"pre_tag": "<em>", "post_tag": "</em>"},
                     },
-                }
+                },
             }
 
         logger.debug(f"ES Query: {json.dumps(search_query, indent=2)}")
 
         try:
             logger.info("Executing Elasticsearch query...")
-            logger.info(f"Query being sent to Elasticsearch: {json.dumps(search_query['query'], indent=2)}")
+            logger.info(
+                f"Query being sent to Elasticsearch: {json.dumps(search_query['query'], indent=2)}"
+            )
             response = await es.search(
                 index=index_name,
                 query=search_query["query"],

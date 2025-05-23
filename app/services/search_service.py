@@ -55,7 +55,11 @@ class SearchService:
                 try:
                     # Parse bbox string into coordinates
                     min_lon, min_lat, max_lon, max_lat = map(float, bbox.split())
-                    logger.info(f"Parsed bbox coordinates: min_lon={min_lon}, min_lat={min_lat}, max_lon={max_lon}, max_lat={max_lat}")
+                    logger.info(
+                        f"Parsed bbox coordinates: "
+                        f"min_lon={min_lon}, min_lat={min_lat}, "
+                        f"max_lon={max_lon}, max_lat={max_lat}"
+                    )
 
                     # Build a geo_shape Polygon filter for dcat_bbox
                     polygon = [
@@ -65,7 +69,7 @@ class SearchService:
                         [min_lon, max_lat],
                         [min_lon, min_lat],  # close the polygon
                     ]
-                    
+
                     # Create the bbox filter
                     bbox_filter = {
                         "geo_shape": {
@@ -74,11 +78,11 @@ class SearchService:
                                     "type": "Polygon",
                                     "coordinates": [polygon],
                                 },
-                                "relation": "intersects"
+                                "relation": "intersects",
                             }
                         }
                     }
-                    
+
                     # Convert regular filters to bool query if needed
                     if filter_query and not isinstance(filter_query, dict):
                         filter_query = {
@@ -98,7 +102,7 @@ class SearchService:
                                 ]
                             }
                         }
-                    
+
                     # If we already have a bool query, add to its must clauses
                     if isinstance(filter_query, dict) and "bool" in filter_query:
                         if "must" in filter_query["bool"]:
@@ -107,18 +111,18 @@ class SearchService:
                             filter_query["bool"]["must"] = [bbox_filter]
                     else:
                         # Create a new bool query with the bbox filter
-                        filter_query = {
-                            "bool": {
-                                "must": [bbox_filter]
-                            }
-                        }
-                    
-                    logger.info(f"Created combined filter query: {json.dumps(filter_query, indent=2)}")
+                        filter_query = {"bool": {"must": [bbox_filter]}}
+
+                    logger.info(
+                        f"Created combined filter query: {json.dumps(filter_query, indent=2)}"
+                    )
                 except (ValueError, IndexError) as e:
                     logger.error(f"Invalid bbox format: {bbox}")
                     raise HTTPException(
                         status_code=400,
-                        detail="Invalid bbox format. Expected format: min_lon min_lat max_lon max_lat"
+                        detail=(
+                            "Invalid bbox format. Expected format: min_lon min_lat max_lon max_lat"
+                        ),
                     ) from e
 
             # Get sort mapping

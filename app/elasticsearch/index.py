@@ -121,10 +121,7 @@ async def process_item(item_dict):
                         # Calculate center point
                         center_lon = (minx + maxx) / 2
                         center_lat = (miny + maxy) / 2
-                        processed_dict[key] = {
-                            "lat": center_lat,
-                            "lon": center_lon
-                        }
+                        processed_dict[key] = {"lat": center_lat, "lon": center_lon}
                     else:
                         # Try to parse as JSON if it's not an ENVELOPE
                         try:
@@ -134,10 +131,7 @@ async def process_item(item_dict):
                                     # Extract coordinates from GeoJSON point
                                     coords = geom.get("coordinates", [])
                                     if len(coords) >= 2:
-                                        processed_dict[key] = {
-                                            "lat": coords[1],
-                                            "lon": coords[0]
-                                        }
+                                        processed_dict[key] = {"lat": coords[1], "lon": coords[0]}
                                     else:
                                         processed_dict[key] = None
                                 else:
