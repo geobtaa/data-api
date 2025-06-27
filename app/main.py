@@ -12,6 +12,7 @@ from fastapi.security import HTTPBasic
 from app.api.v1.admin import router as admin_router
 from app.api.v1.endpoints import router as public_router
 from app.api.v1.gazetteer import router as gazetteer_router
+from app.api.v1.shapefiles import router as shapefiles_router
 from app.elasticsearch import close_elasticsearch, init_elasticsearch
 from db.database import database
 
@@ -98,6 +99,7 @@ app.add_middleware(
 app.include_router(public_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1/admin", dependencies=[Depends(security)])
 app.include_router(gazetteer_router, prefix="/api/v1")
+app.include_router(shapefiles_router, prefix="/api/v1")
 
 
 @app.exception_handler(Exception)

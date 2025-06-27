@@ -56,6 +56,13 @@ The application uses several services:
   - Persistence enabled
   - Used for API caching and Celery tasks
 
+* [DuckDB](https://duckdb.org/) (Embedded analytical database)
+  - Runs in-process with the Python application
+  - No separate service or port required
+  - Database file: `data/duckdb/btaa_ogm_api.duckdb`
+  - Used for analytical queries and data processing
+  - Access via Python `duckdb` package
+
 * [Celery Worker](https://docs.celeryq.dev/) (Background task processor)
   - Processes asynchronous tasks
   - Connected to Redis and ParadeDB
